@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+
+# round-trip artifacts
+app/*.enc
+app/*.enc.dec
+app/downloaded.*
+app/sample.txt.dec
