@@ -6,7 +6,7 @@ export type BucketSummary = {
   id: string;
   name: string;
   visibility: string;
-  state: string;
+  provisioning_state?: string;
   seal_policy_id: string | null;
 };
 export type FileSummary = {
@@ -19,12 +19,14 @@ export type ReserveResponse = {
   bucket_id: string;
   bytes: string;
   digest: string;
-  state: string;
+  provisioning_state: string;
+  owner_address: string;
+  admin_signer_address: string;
 };
 export type FinalizeResponse = {
   bucket_id: string;
   seal_policy_id: string;
-  state: string;
+  provisioning_state: string;
 };
 export type UploadResponse = { data: { id: string } };
 export type FileState = 'queued' | 'active' | 'completed' | 'failed';
@@ -212,6 +214,7 @@ export class ConsoleClient {
     throw new Error(`File did not reach 'completed' within ${this.pollMaxAttempts} polls.`);
   }
 
+  // Console can answer 307 to a separate user-content host; fetch follows it.
   async downloadFile(bucketId: string, fileId: string): Promise<Uint8Array<ArrayBuffer>> {
     const res = await fetch(
       `${this.baseUrl}/api/v1/buckets/${bucketId}/files/${fileId}/download`,

@@ -6,12 +6,16 @@ export const FULLNODE_URL = 'https://fullnode.testnet.sui.io:443';
 // Original/canonical published id of Console's bucket-policy package.
 // Used by Seal for encrypt + SessionKey identity derivation (must NOT change on upgrade).
 export const ORIGINAL_PACKAGE_ID =
-  '0x8b2429358e9b0f005b69fe8ad3cbd1268ad87f35047a21612e082c64824faf8d';
+  '0xf9b261d4c0dbcf845d79f864e85581f9686fd6de9f4770ba1d77489d67f7833c';
 
 // Latest published id of Console's bucket-policy package.
 // Used as the moveCall target for `seal_approve` during decrypt.
 export const LATEST_PACKAGE_ID =
-  '0xc11d875481544e9b6c616f7d6704266e1633b4034eab7ed76626dc25ebfcd506';
+  '0xf9b261d4c0dbcf845d79f864e85581f9686fd6de9f4770ba1d77489d67f7833c';
+
+// Shared BucketRegistry object — required second argument of `seal_approve`
+export const BUCKET_REGISTRY_ID =
+  '0x902841af0cd25c5f8dee4980fe2942687c9ca80db56d77ff67a4ba6d9d97b9cf';
 
 export const SEAL_THRESHOLD = 2;
 

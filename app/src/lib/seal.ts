@@ -7,6 +7,7 @@ import { fromBase64, fromHex } from '@mysten/sui/utils';
 import { EncryptedObject, SealClient, SessionKey } from '@mysten/seal';
 
 import {
+  BUCKET_REGISTRY_ID,
   FULLNODE_URL,
   LATEST_PACKAGE_ID,
   ORIGINAL_PACKAGE_ID,
@@ -15,8 +16,9 @@ import {
   SUI_NETWORK,
 } from '../config.js';
 
-// On-chain `seal_approve` expects `(vector<u8> id, &BucketGroup)` where `id` deserializes
-// as this struct via BCS. Keep field order in sync with Console's Move definition.
+// On-chain `seal_approve` expects `(vector<u8> id, &BucketRegistry, &PermissionedGroup)`
+// where `id` deserializes as this struct via BCS. Keep field order in sync with
+// Console's Move definition.
 const SealIdentity = bcs.struct('SealIdentity', {
   policyObjectId: bcs.Address,
   nonce: bcs.fixedArray(32, bcs.u8()),
@@ -79,7 +81,11 @@ export function buildSealApproveTxBytes(
   const tx = new Transaction();
   tx.moveCall({
     target: `${LATEST_PACKAGE_ID}::bucket_policy::seal_approve`,
-    arguments: [tx.pure.vector('u8', Array.from(idBytes)), tx.object(sealPolicyId)],
+    arguments: [
+      tx.pure.vector('u8', Array.from(idBytes)),
+      tx.object(BUCKET_REGISTRY_ID),
+      tx.object(sealPolicyId),
+    ],
   });
   return tx.build({ client: suiClient, onlyTransactionKind: true });
 }

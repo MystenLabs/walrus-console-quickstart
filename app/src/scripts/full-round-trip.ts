@@ -36,7 +36,7 @@ let reserved;
 try {
   reserved = await consoleClient.reserveBucket(space.id, BUCKET_NAME);
 } catch (err) {
-  if (err instanceof ConsoleError && err.parsed?.code === 'PLAN_LIMIT_EXCEEDED') {
+  if (err instanceof ConsoleError && err.parsed?.code === 'plan_limit_exceeded') {
     console.error(
       `\nBucket cap reached for space ${space.id}. This script leaves each ` +
         `created bucket behind (only the file is deleted), so cleanup is on you. ` +
@@ -61,7 +61,9 @@ console.log(`  signature.length=${signature.length}`);
 
 step(4, 'Finalize');
 const finalized = await consoleClient.finalizeBucket(reserved.bucket_id, signature);
-console.log(`  seal_policy_id=${finalized.seal_policy_id} state=${finalized.state}`);
+console.log(
+  `  seal_policy_id=${finalized.seal_policy_id} provisioning_state=${finalized.provisioning_state}`,
+);
 
 step(5, 'Encrypt sample.txt with Seal');
 const plaintext = await readFile(SAMPLE_PATH);
