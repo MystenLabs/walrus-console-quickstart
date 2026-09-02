@@ -147,7 +147,7 @@ done
 ### 7. Download
 
 ```bash
-curl -sS -H "$AUTH" -o downloaded.enc \
+curl -sSL -H "$AUTH" -o downloaded.enc \
   "$BASE/api/v1/buckets/$BUCKET_ID/files/$FILE_ID/download"
 ```
 
@@ -168,7 +168,7 @@ Stranded `pending_policy` (reserve succeeded, finalize never landed):
 
 ```bash
 curl -sS -H "$AUTH" "$BASE/api/v1/spaces/$SPACE_ID/buckets" \
-  | jq -r '.buckets[] | select(.state=="pending_policy") | .id' \
+  | jq -r '.buckets[] | select(.provisioning_state=="pending_policy") | .id' \
   | xargs -I{} curl -sS -X DELETE -H "$AUTH" -o /dev/null -w '%{http_code} {}\n' \
       "$BASE/api/v1/buckets/{}?confirm=true"
 ```
@@ -275,7 +275,7 @@ for production code:
   first. Cleanest target is `pending_policy` (no files possible).
 - **`full-round-trip.ts` does not clean up its bucket.** Only the file is
   deleted; the bucket stays. Repeated runs accumulate and eventually trip the
-  per-space bucket cap (`422 PLAN_LIMIT_EXCEEDED` on the next reserve). The
+  per-space bucket cap (`422 plan_limit_exceeded` on the next reserve). The
   script catches that specific error and prints the cleanup snippet; run it
   and retry.
   _Improve:_ delete the bucket too at the end (or `set -e` a cleanup trap),

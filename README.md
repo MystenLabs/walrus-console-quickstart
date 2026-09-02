@@ -36,7 +36,7 @@ If you can call a REST endpoint, you can build on Console.
 | Path                             | What it is                                                                                      |
 | -------------------------------- | ----------------------------------------------------------------------------------------------- |
 | [`QUICKSTART.md`](QUICKSTART.md) | "Hello world" tour — sign up, create an encrypted bucket, upload + download a file. Start here. |
-| [`openapi.yaml`](openapi.yaml)   | Curated OpenAPI spec — the public, Bearer-only API surface (11 endpoints).                      |
+| [`openapi.yaml`](openapi.yaml)   | Curated OpenAPI spec — the public, Bearer-only API surface (13 endpoints).                      |
 | [`postman/`](postman/)           | Ready-to-import Postman collection + environment for poking the API by hand.                    |
 | [`app/`](app/)                   | TypeScript reference integration: curl walkthrough, helper CLIs, automated round-trip, Hono backend. |
 | [`AGENTS.md`](AGENTS.md)         | Repo-level guidance for AI coding assistants (loaded by `CLAUDE.md`).                           |

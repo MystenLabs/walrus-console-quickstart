@@ -108,7 +108,7 @@ Response (`201`):
   "bucket_id": "…",
   "bytes": "<base64 Enoki-sponsored Sui tx>",
   "digest": "…",
-  "state": "pending_policy"
+  "provisioning_state": "pending_policy"
 }
 ```
 
@@ -132,7 +132,7 @@ files can be uploaded to it.
 > is taken — either by a live bucket or by one stuck in `pending_policy`
 > from a previous aborted reserve. Pick a new name (e.g. append a Unix
 > timestamp), or clean up the stale bucket: list with
-> `GET /api/v1/spaces/{id}/buckets`, filter `state == "pending_policy"`,
+> `GET /api/v1/spaces/{id}/buckets`, filter `provisioning_state == "pending_policy"`,
 > then `DELETE /api/v1/buckets/{id}?confirm=true` on each (the
 > `confirm=true` query param is required; delete also 400s if the bucket
 > still has files).
@@ -165,7 +165,7 @@ Console combines your signature with Enoki's gas-sponsor signature and
 broadcasts the transaction. Response (`200`):
 
 ```json
-{ "bucket_id": "…", "seal_policy_id": "…", "state": "active" }
+{ "bucket_id": "…", "seal_policy_id": "…", "provisioning_state": "active" }
 ```
 
 `seal_policy_id` is the on-chain bucket-group object id used by Seal for
@@ -189,7 +189,7 @@ import { bcs } from '@mysten/sui/bcs';
 // value even after the package has been upgraded — otherwise an upgrade would
 // invalidate every previously-encrypted blob's DEK.
 const CONSOLE_ORIGINAL_PACKAGE_ID =
-  '0x8b2429358e9b0f005b69fe8ad3cbd1268ad87f35047a21612e082c64824faf8d';
+  '0xf9b261d4c0dbcf845d79f864e85581f9686fd6de9f4770ba1d77489d67f7833c';
 const SEAL_KEY_SERVER_OBJECT_IDS = [
   '0x6068c0acb197dddbacd4746a9de7f025b2ed5a5b6c1b1ab44dade4426d141da2',
   '0x164ac3d2b3b8694b8181c13f671950004765c23f270321a45fdd04d40cccf0f2',
@@ -234,8 +234,9 @@ Content-Type: multipart/form-data
 file=@<encryptedObject>
 ```
 
-Standard multipart upload, but the on-chain `BucketAdmin` grant from
-Finalize needs a few seconds to land in Console's ACL indexer. Until then
+Standard multipart upload, but the on-chain grant your key gets from
+Finalize — `BucketEditor` for a `readwrite` key, `BucketViewer` for a `read`
+key — needs a few seconds to land in Console's ACL indexer. Until then
 this endpoint returns `403` with `code: "mirror_missing_grant"`. Retry
 every ~3 seconds; ≤20 attempts is plenty in practice. Once the grant
 mirrors, the response is `202` with `data.id`.
@@ -256,6 +257,12 @@ under 30 seconds on testnet.
 GET /api/v1/buckets/{bucketId}/files/{fileId}/download
 ```
 
+**Follow redirects.** On deployments that serve user content from its own
+hostname, this answers `307` to that host rather than returning bytes, so use
+`curl -L` or an HTTP client with redirects enabled. The redirect target is
+single-use and short-lived. Mint your own with `POST .../download-url` if you
+need a link that lasts.
+
 Returns the raw **Seal ciphertext**. Decrypt with `@mysten/seal` by
 building the bucket's `seal_approve` access-check PTB (signed by your
 service key via a `SessionKey`) and feeding both the ciphertext and the
@@ -270,7 +277,10 @@ import { fromHex } from '@mysten/sui/utils';
 
 // Latest Console bucket-policy package — host of the `seal_approve` move call.
 const CONSOLE_LATEST_PACKAGE_ID =
-  '0xc11d875481544e9b6c616f7d6704266e1633b4034eab7ed76626dc25ebfcd506';
+  '0xf9b261d4c0dbcf845d79f864e85581f9686fd6de9f4770ba1d77489d67f7833c';
+// Shared BucketRegistry — `seal_approve` reads its pause + version state.
+const CONSOLE_BUCKET_REGISTRY_ID =
+  '0x902841af0cd25c5f8dee4980fe2942687c9ca80db56d77ff67a4ba6d9d97b9cf';
 
 const { secretKey } = decodeSuiPrivateKey(process.env.CONSOLE_SERVICE_PRIVKEY);
 const keypair = Ed25519Keypair.fromSecretKey(secretKey);
@@ -283,7 +293,11 @@ const idBytes = fromHex(parsed.id.startsWith('0x') ? parsed.id : '0x' + parsed.i
 const tx = new Transaction();
 tx.moveCall({
   target: `${CONSOLE_LATEST_PACKAGE_ID}::bucket_policy::seal_approve`,
-  arguments: [tx.pure.vector('u8', idBytes), tx.object(sealPolicyId)],
+  arguments: [
+    tx.pure.vector('u8', idBytes),
+    tx.object(CONSOLE_BUCKET_REGISTRY_ID),
+    tx.object(sealPolicyId),
+  ],
 });
 const txBytes = await tx.build({ client: sui, onlyTransactionKind: true });
 
@@ -320,4 +334,4 @@ Please include:
 
 For the full machine-readable surface, see
 [`openapi.yaml`](openapi.yaml) (curated, Bearer-only,
-11 endpoints).
+13 endpoints).

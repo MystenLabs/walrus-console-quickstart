@@ -39,10 +39,16 @@ key that signs the reserve transaction and Seal decrypt sessions.
   `keypair.signTransaction(fromBase64(bytes))`.
 - Encrypt + `SessionKey` use `ORIGINAL_PACKAGE_ID` (canonical id — Seal pins identity
   derivation to it).
-- `seal_approve` move-call target uses `LATEST_PACKAGE_ID::bucket_policy::seal_approve`.
+- `seal_approve` move-call target uses `LATEST_PACKAGE_ID::bucket_policy::seal_approve`
+  with args `(vector<u8> id, &BucketRegistry, &PermissionedGroup)` — the shared
+  `BUCKET_REGISTRY_ID` object is a required argument since the August 2026 contract.
 - After Finalize the first upload (and the first `GET /buckets/{id}` metadata
   read) may return `403 mirror_missing_grant` while the ACL indexer catches up.
   Retry ~3s, ≤20 attempts.
+- Reserve and Finalize report the bucket lifecycle as `provisioning_state`
+  (`pending_policy` → `active`). File upload status still uses `state`.
+- `GET …/files/{fileId}/download` can answer `307` to a user-content host.
+  Follow redirects (`curl -L`; `fetch` follows them by default).
 - Poll `…/files/{fileId}/status` until `state === "completed"` before download.
 - `DELETE /api/v1/buckets/{id}` requires `?confirm=true`; also 400s if the bucket
   still has files.
