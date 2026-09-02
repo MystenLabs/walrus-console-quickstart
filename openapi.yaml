@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: Console External API
+  title: Walrus Console External API
   version: 0.1.0
   description: >-
     Curated external API surface for third-party developers. Authenticate every request with
@@ -8,6 +8,8 @@ info:
 servers:
   - url: https://api.testnet.console.walrus.xyz
     description: Testnet
+  - url: https://api.console.walrus.xyz
+    description: Mainnet
 tags:
   - name: Spaces
     description: Space management
@@ -177,6 +179,35 @@ paths:
                   type: string
                   enum:
                     - private
+                expectedOwnerAddress:
+                  type: string
+                  description: >-
+                    Optional client-pinned owner address; the reserve is rejected with 409
+                    bucket_create_owner_mismatch when it does not match the server's record.
+                    Diagnostics only — the client-side config pin remains the enforcement point.
+                    Note: camelCase, unlike response fields.
+                members:
+                  type: array
+                  maxItems: 32
+                  description: >-
+                    Optional client-authored roster of OTHER service accounts to grant on the new
+                    bucket. Present (including an empty array) means the PTB grants exactly this set
+                    and the space's active signers are ignored; omit it to let the server derive the
+                    roster from space state.
+                  items:
+                    type: object
+                    required:
+                      - address
+                      - role
+                    properties:
+                      address:
+                        type: string
+                        description: Sui address of the member.
+                      role:
+                        type: string
+                        enum:
+                          - viewer
+                          - editor
       responses:
         '201':
           description: >-
@@ -193,7 +224,9 @@ paths:
                   - bucket_id
                   - bytes
                   - digest
-                  - state
+                  - provisioning_state
+                  - owner_address
+                  - admin_signer_address
                 properties:
                   bucket_id:
                     type: string
@@ -203,12 +236,29 @@ paths:
                     description: Base64 sponsored transaction bytes.
                   digest:
                     type: string
-                  state:
+                  provisioning_state:
                     type: string
                     enum:
                       - pending_policy
+                  owner_address:
+                    type: string
+                    description: >-
+                      The bucket's human owner (A) the reserve was bound to — echoed so clients can
+                      verify their config-pinned owner (COMG-761).
+                  admin_signer_address:
+                    type:
+                      - string
+                      - 'null'
+                    description: >-
+                      Space's active Key-Admin signer baked into the sponsored PTB; null when the
+                      space has none.
         '400':
-          description: Validation error
+          description: >-
+            Validation error, or the client-authored `members` roster was rejected (code
+            bucket_create_authored_members_invalid: duplicate address, the caller's own address, the
+            owner address, an address that is not an active data-plane signer of the space
+            (`key_admin` keys are excluded), a role that contradicts an active key's expected
+            on-chain permission, or `members` sent on the session path)
         '401':
           description: Not authenticated
         '403':
@@ -216,7 +266,9 @@ paths:
         '404':
           description: Space not found
         '409':
-          description: Bucket name conflict
+          description: >-
+            Bucket name conflict, or expectedOwnerAddress does not match the server's record (code
+            bucket_create_owner_mismatch)
         '422':
           description: Plan limit exceeded
           content:
@@ -292,9 +344,9 @@ paths:
                     properties:
                       limit:
                         type: integer
-                      hasMore:
+                      has_more:
                         type: boolean
-                      nextCursor:
+                      next_cursor:
                         type:
                           - string
                           - 'null'
@@ -507,9 +559,9 @@ paths:
                     properties:
                       limit:
                         type: integer
-                      hasMore:
+                      has_more:
                         type: boolean
-                      nextCursor:
+                      next_cursor:
                         type:
                           - string
                           - 'null'
@@ -560,8 +612,22 @@ paths:
                   maxLength: 255
                 metadata:
                   type: string
-                  description: Optional JSON object string persisted in Console metadata column. Maximum 8KB.
-                  example: '{"tag":"blue"}'
+                  description: >-
+                    Optional JSON object string persisted in the file's metadata column. Envelope
+                    limits: max 8KB, max depth 5, max 100 keys.  Two reserved keys — `description`
+                    and `tags` — are validated against the same limits as `PATCH /files/{id}`:
+                    description ≤ 1000 chars, tags ≤ 10 items, each tag ≤ 30 chars. Over-limit
+                    values return 400 with field-level detail.  Reserved keys are also normalized
+                    before persist (trimmed, tags deduped case-insensitively and stored canonical
+                    lowercase). Other keys pass through unchanged.
+                  example: '{"description":"trip photos","tags":["travel","nature"],"client_state":"any"}'
+                contentSize:
+                  type: string
+                  description: >-
+                    Plaintext byte count (non-negative integer, sent as a string) for private
+                    (Seal-encrypted) uploads, where the body is ciphertext. Must not exceed the
+                    uploaded payload size. Ignored for public buckets.
+                  example: '0'
       responses:
         '202':
           description: Accepted
@@ -598,6 +664,14 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '413':
           description: Payload too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '415':
+          description: >-
+            File type is not accepted (`code: "unsupported_file_type"`). Matched on the file name
+            for every upload, and additionally on the content signature for unencrypted ones.
           content:
             application/json:
               schema:
@@ -656,7 +730,7 @@ paths:
                     type:
                       - string
                       - 'null'
-                  state:
+                  provisioning_state:
                     type: string
         '400':
           description: Validation error
@@ -718,6 +792,28 @@ paths:
                 - type: object
                   required:
                     - kind
+                    - groupIds
+                    - adminSignerAddress
+                  description: >-
+                    permissioned_group::grant_permission<ExtensionPermissionsAdmin> — back-fills a
+                    Key-Admin key's manager role across the space's existing private buckets. Sender
+                    must hold PermissionsAdmin on each group. Session-only.
+                  properties:
+                    kind:
+                      type: string
+                      enum:
+                        - grant_admin_access
+                    groupIds:
+                      type: array
+                      items:
+                        type: string
+                      minItems: 1
+                      maxItems: 1000
+                    adminSignerAddress:
+                      type: string
+                - type: object
+                  required:
+                    - kind
                     - bucketId
                   properties:
                     kind:
@@ -726,12 +822,17 @@ paths:
                         - bucket_group_create
                     bucketId:
                       type: string
-                      minLength: 1
+                      format: uuid
                 - type: object
                   required:
                     - kind
                     - groupId
                     - member
+                  description: >-
+                    bucket_policy::add_admin — grants the manager role (BucketAdmin +
+                    ExtensionPermissionsAdmin). Admins manage viewers/editors and decrypt content,
+                    but cannot remove owners or pause the bucket. Sender must hold both
+                    PermissionsAdmin and ExtensionPermissionsAdmin. Session-only.
                   properties:
                     kind:
                       type: string
@@ -746,6 +847,10 @@ paths:
                     - kind
                     - groupId
                     - member
+                  description: >-
+                    bucket_policy::revoke_all_permissions — removes every permission `member` holds
+                    on the group. The wire kind keeps the legacy `unshare` name. Aborts on-chain if
+                    `member` is the group's last owner (ECannotRemoveLastAdmin). Session-only.
                   properties:
                     kind:
                       type: string
@@ -760,6 +865,12 @@ paths:
                     - kind
                     - groupId
                     - serviceSignerAddress
+                  description: >-
+                    bucket_policy::revoke_all_permissions targeted at an API key's service signer —
+                    submitted once per bucket by the revocation flow. Same on-chain guards as
+                    `unshare`, and session-only for the same reason: the revocation plan is
+                    authorized against the session user, so a Bearer caller has no legitimate use
+                    for this kind.
                   properties:
                     kind:
                       type: string
@@ -832,6 +943,123 @@ paths:
           description: Access denied
         '404':
           description: Digest not found or expired
+  /api/v1/seal/aggregator/v1/fetch_key:
+    post:
+      tags:
+        - SEAL
+      summary: Proxy Seal aggregator fetch_key on mainnet
+      description: >-
+        Backend proxy for `POST ${aggregatorUrl}/v1/fetch_key`.
+
+
+        Errors: this endpoint is shaped to behave well with the Seal SDK, which keeps only the
+        `message` field of an error body. Relayed aggregator errors keep the key-server `{error,
+        message}` shape verbatim; locally generated failures add `message: "console:<code>"` to the
+        console `{error, code}` envelope — the prefix cannot collide with Seal error names.
+      operationId: sealFetchKey
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - ptb
+                - enc_key
+                - enc_verification_key
+                - request_signature
+                - certificate
+              properties:
+                ptb:
+                  type: string
+                  minLength: 1
+                enc_key:
+                  type: string
+                  minLength: 1
+                enc_verification_key:
+                  type: string
+                  minLength: 1
+                request_signature:
+                  type: string
+                  minLength: 1
+                certificate:
+                  type: object
+                  required:
+                    - user
+                    - session_vk
+                    - creation_time
+                    - ttl_min
+                    - signature
+                  properties:
+                    user:
+                      type: string
+                      description: >-
+                        Sui address that signed the SessionKey. Under cookie auth it must be the
+                        session wallet. Under Bearer auth either the API key's service signer or the
+                        key owner's wallet is accepted; a service key signs with the former.
+                    session_vk:
+                      type: string
+                      minLength: 1
+                    creation_time:
+                      type: integer
+                      minimum: 0
+                    ttl_min:
+                      type: integer
+                      minimum: 1
+                      maximum: 30
+                    signature:
+                      type: string
+                      minLength: 1
+                    mvr_name:
+                      type:
+                        - string
+                        - 'null'
+      responses:
+        '200':
+          description: Aggregator response bytes (JSON `{decryption_keys}`), returned verbatim.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          description: >-
+            Zod validation failure, `sessionkey_address_mismatch` when `certificate.user` matches
+            neither the authenticated caller's wallet address nor the API key's service signer, or
+            aggregator 400 (SDK-header fault) relayed verbatim.
+        '401':
+          description: Not authenticated
+        '403':
+          description: >-
+            Aggregator 403 relayed verbatim (`NoAccess`, `InvalidPTB`, ...), or `read_only_api_key`
+            for a `key_admin` key. `read` and `readwrite` keys are both allowed here.
+        '413':
+          description: >-
+            Request body exceeds 180 KiB (hono `bodyLimit`'s default; matches the Seal key server's
+            own cap).
+        '426':
+          description: >-
+            Aggregator 426 relayed verbatim — client SDK is below the aggregator's floor
+            (`DeprecatedSDKVersion`).
+        '429':
+          description: >-
+            Rate limit exceeded. Proxy GCRA denials (per-account 60/min, per-IP 120/min, global
+            200/s) always set `Retry-After`; a limiter-store outage also 429s (fail-closed via
+            `DENIED_ON_STORE_ERROR`). An aggregator upstream 429 is relayed verbatim and its own
+            `Retry-After` is preserved via `RELAYED_UPSTREAM_HEADERS`.
+        '502':
+          description: >-
+            `SealAggregatorUpstreamError`: fetch failure, 8s timeout, oversized aggregator response
+            body, a 3xx we refused to follow, or a 401 from the aggregator
+            (`crates/key-server/src/errors.rs` cannot emit 401 itself — a 401 is Kong's `key-auth`
+            rejecting our Enoki key; we remap so a global FE 401 handler does not log the user out
+            on a proxy-side problem).
+        '503':
+          description: Proxy disabled (`SEAL_PROXY_ENABLED=false`) or an aggregator 503 relayed verbatim.
+        5XX:
+          description: Any other aggregator 5xx is relayed verbatim.
   /api/v1/buckets/{id}/files/{fileId}:
     get:
       tags:
@@ -1004,9 +1232,21 @@ paths:
         - Files
       summary: Download file
       description: >-
-        Stream the raw file content. Returns the file with appropriate Content-Type and
-        Content-Disposition headers. Private/authenticated content is never cached by shared
-        proxies.
+        Stream the raw file content. Served as `application/octet-stream` with `Content-Disposition:
+        attachment` regardless of the uploader's MIME type, plus `nosniff`, a `sandbox` CSP and
+        `X-Frame-Options: DENY` (SEC-491 F-1). Private/authenticated content is never cached by
+        shared proxies.
+
+
+        Once user content is served from its own hostname (SEC-491 F-1 / COMG-819), this route stops
+        returning bytes: a bearer caller gets a `307` to that host and **must follow redirects**
+        (`curl -L`), and a session caller gets `403 use_download_url` and should mint via `POST
+        .../download-url` instead. Until that hostname is configured the route streams as it does
+        today.
+
+
+        Session callers: this route stamps `last_opened_at`, which makes it a state change, so it
+        requires an allow-listed `Origin` header (SEC-491 F-36). API-key callers are exempt.
       operationId: downloadBucketFile
       security:
         - bearerAuth: []
@@ -1032,7 +1272,9 @@ paths:
             Content-Type:
               schema:
                 type: string
-              description: MIME type of the file
+              description: >-
+                Always `application/octet-stream` — the uploader's MIME is never echoed (SEC-491
+                F-1)
             Content-Disposition:
               schema:
                 type: string
@@ -1059,7 +1301,9 @@ paths:
         '401':
           description: Not authenticated
         '403':
-          description: Access denied
+          description: >-
+            Access denied, or a session request without an allow-listed `Origin` header (this route
+            stamps `last_opened_at`, so it is not a safe method)
           content:
             application/json:
               schema:
@@ -1070,6 +1314,115 @@ paths:
           description: File row is in 'deleting' or 'deleted' status
         '500':
           description: Blob stream unavailable
+  /api/v1/buckets/{id}/files/{fileId}/download-url:
+    post:
+      tags:
+        - Files
+      summary: Mint a signed download URL
+      description: >-
+        Mint a short-lived HMAC-signed download URL (COMG-120 / ADR-013). The returned URL is
+        redeemable at `GET /downloads/{token}` without authentication, until `expires_at`.
+
+
+        The requested TTL is clamped to the space plan's cap (free 15m, starter/pro 1h, business
+        24h). Mint is rate-limited per space AND per API key.
+
+
+        Minting issues a bearer capability and spends rate-limit quota, so it is a state change and
+        belongs on a method the anti-forgery check covers unconditionally (SEC-491 F-36). The `GET
+        .../download?signed_url=true` form this replaced has been removed.
+
+
+        The body is optional: omit it to mint at the plan-default TTL.
+      operationId: mintBucketFileDownloadUrl
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Bucket UUID
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: File UUID
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ttl:
+                  type: integer
+                  minimum: 1
+                  description: Requested URL lifetime in seconds. Clamped to the space plan cap.
+      responses:
+        '200':
+          description: Signed-URL mint response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      download_url:
+                        type: string
+                        description: Relative path of the form `/downloads/v1.<payload_b64url>.<sig_b64url>`
+                        example: /downloads/v1.eyJ2Ijox...mt.4eVH...
+                      expires_at:
+                        type: string
+                        format: date-time
+                        description: ISO 8601 expiry timestamp
+                    required:
+                      - download_url
+                      - expires_at
+                required:
+                  - data
+        '400':
+          description: Invalid path parameter, or invalid `ttl` (non-positive or non-integer)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not authenticated
+        '403':
+          description: Access denied, or missing/invalid Origin on a session-authenticated request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Bucket or file not found
+        '409':
+          description: >-
+            File is not `active` yet — the asynchronous upload has not finished. Retry once `GET
+            .../status` reports completion.
+        '415':
+          description: >-
+            Request body declared a content type other than application/json. Sent rather than
+            silently ignoring a `ttl` the server would not read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '423':
+          description: File row is in 'deleting' or 'deleted' status
+        '429':
+          description: Mint rate limit exceeded for space or API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     bearerAuth:
@@ -1100,29 +1453,77 @@ components:
             - bucket_not_in_scope
             - mirror_missing_grant
             - bucket_not_finalized
+            - bucket_deleting
+            - bucket_gone
+            - file_deleting
             - quota_exceeded
             - payload_too_large
             - bad_request
+            - email_already_registered
+            - unsupported_media_type
+            - unsupported_file_type
+            - invalid_origin
       required:
         - error
+    RevocationConflictResponse:
+      type: object
+      required:
+        - error
+        - code
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+        code:
+          type: string
+          enum:
+            - admin_transfer_required
+            - service_signer_still_active
+            - api_key_not_revocable
+        buckets:
+          type: array
+          description: >-
+            Buckets whose Seal policy the caller does not administer, so the unshare cannot be
+            signed. Sent only with `admin_transfer_required`.
+          items:
+            type: object
+            required:
+              - bucket_id
+              - seal_policy_id
+            properties:
+              bucket_id:
+                type: string
+                format: uuid
+              seal_policy_id:
+                type: string
+        remaining_count:
+          type: integer
+          description: >-
+            How many buckets still list the service signer as active. Sent only with
+            `service_signer_still_active`.
     PlanLimitExceededResponse:
       type: object
       required:
         - code
         - limit
-        - currentTier
+        - current_tier
       properties:
         code:
           type: string
           enum:
-            - PLAN_LIMIT_EXCEEDED
+            - plan_limit_exceeded
         limit:
           type: string
           enum:
             - storage
             - users
             - buckets
-        currentTier:
+        limit_value:
+          type: integer
+          description: >-
+            The cap that was hit, in the unit of `limit`: a folder count for `buckets`, a member
+            count for `users`. Absent for `storage`, so clients must handle it being missing.
+        current_tier:
           type: string
           enum:
             - free
@@ -1151,18 +1552,18 @@ components:
           type: string
           format: uuid
           description: Server-generated single-use nonce
-        issued_at:
+        issuedAt:
           type: string
           format: date-time
-        expires_at:
+        expiresAt:
           type: string
           format: date-time
           description: Challenge expires 5 minutes after issuance
       required:
         - challenge
         - nonce
-        - issued_at
-        - expires_at
+        - issuedAt
+        - expiresAt
     AuthenticatedUser:
       type: object
       properties:
@@ -1173,15 +1574,15 @@ components:
           type:
             - string
             - 'null'
-        sui_address:
+        suiAddress:
           type: string
         harborWalletAddress:
           type:
             - string
             - 'null'
-        auth_provider:
+        authProvider:
           $ref: '#/components/schemas/AuthProvider'
-        created_at:
+        createdAt:
           type: string
           format: date-time
     UserProfileDTO:
@@ -1194,22 +1595,29 @@ components:
           type:
             - string
             - 'null'
-        sui_address:
+        suiAddress:
           type: string
         harborWalletAddress:
           type:
             - string
             - 'null'
-        auth_provider:
+        authProvider:
           $ref: '#/components/schemas/AuthProvider'
-        personal_space_id:
+        personalSpaceId:
           type:
             - string
             - 'null'
           format: uuid
-        created_at:
+        createdAt:
           type: string
           format: date-time
+        features:
+          type: object
+          properties:
+            memories:
+              type: boolean
+          required:
+            - memories
     AuthProvider:
       type: string
       enum:
@@ -1226,9 +1634,9 @@ components:
           format: uuid
         provider:
           $ref: '#/components/schemas/AuthProvider'
-        provider_address:
+        providerAddress:
           type: string
-        linked_at:
+        linkedAt:
           type: string
           format: date-time
     ApiKeySummary:
@@ -1253,6 +1661,11 @@ components:
           enum:
             - read_only
             - read_write
+            - key_admin
+          description: |-
+            read_only: Can read objects in private buckets.
+            read_write: Can read and write objects in private buckets.
+            key_admin: Can only create data-plane keys; no bucket access.
         last_used_at:
           type:
             - string
@@ -1283,6 +1696,11 @@ components:
           enum:
             - read_only
             - read_write
+            - key_admin
+          description: |-
+            read_only: Can read objects in private buckets.
+            read_write: Can read and write objects in private buckets.
+            key_admin: Can only create data-plane keys; no bucket access.
         created_at:
           type: string
           format: date-time
@@ -1331,6 +1749,42 @@ components:
           description: owner for personal, team role for team spaces
         created_at:
           type: string
+          format: date-time
+    BucketMetadata:
+      type: object
+      description: 'COMG-489: folder Metadata tab projection (description, tags, stats).'
+      required:
+        - description
+        - tags
+        - size
+        - asset_count
+        - created_at
+        - updated_at
+        - last_opened_at
+      properties:
+        description:
+          type:
+            - string
+            - 'null'
+        tags:
+          type: array
+          items:
+            type: string
+        size:
+          type: integer
+          description: Total stored bytes across the folder's assets.
+        asset_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_opened_at:
+          type:
+            - string
+            - 'null'
           format: date-time
     Bucket:
       type: object
@@ -1458,6 +1912,13 @@ components:
             - 'null'
         size:
           type: integer
+        content_size:
+          type:
+            - integer
+            - 'null'
+          description: >-
+            Plaintext content size in bytes for private (encrypted) files; null for public files and
+            legacy rows. The size field stays the stored (ciphertext) size.
         mime_type:
           type:
             - string
@@ -1469,7 +1930,7 @@ components:
         metadata:
           type: object
           additionalProperties: true
-          description: User-defined metadata persisted by Console.
+          description: User-defined metadata persisted by Walrus Console.
         created_at:
           type: string
           format: date-time
@@ -1477,6 +1938,11 @@ components:
           type: string
           format: date-time
         deleted_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        last_opened_at:
           type:
             - string
             - 'null'
@@ -1490,3 +1956,4 @@ components:
         - is_private
         - created_at
         - updated_at
+        - last_opened_at
