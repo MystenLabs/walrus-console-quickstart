@@ -56,8 +56,9 @@ key that signs the reserve transaction and Seal decrypt sessions.
 ## Verify
 
 From `app/`: `pnpm install && pnpm run typecheck`. Round-trip:
-`pnpm run full-round-trip` must end with **MATCH**, file delete, and
-`Round-trip OK.`. Server smoke test: `pnpm start`, then POST/GET/DELETE
-through the routes table in `app/README.md`.
+`pnpm run full-round-trip` must end with **MATCH**, file delete, bucket
+delete, and `Round-trip OK.`. It also mints and redeems a signed download
+URL and compares the bytes. Server smoke test: `pnpm start`, then
+POST/GET/DELETE through the routes table in `app/README.md`.
 
 When in doubt, re-read `QUICKSTART.md` §2.

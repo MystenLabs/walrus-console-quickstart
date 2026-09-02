@@ -29,6 +29,7 @@ export type FinalizeResponse = {
   provisioning_state: string;
 };
 export type UploadResponse = { data: { id: string } };
+export type DownloadUrlData = { download_url: string; expires_at: string };
 export type FileState = 'queued' | 'active' | 'completed' | 'failed';
 export type StatusResponse = {
   data: { state: FileState; error?: { code: string; message: string } };
@@ -220,6 +221,37 @@ export class ConsoleClient {
       `${this.baseUrl}/api/v1/buckets/${bucketId}/files/${fileId}/download`,
       { headers: this.authHeader },
     );
+    if (!res.ok) {
+      const body = await readBody(res);
+      throw new ConsoleError(res.status, body, tryParseJson(body));
+    }
+    return new Uint8Array(await res.arrayBuffer());
+  }
+
+  // Mint a short-lived signed download URL. `ttlSeconds` is clamped to the
+  // space plan's cap (free 15m); omit it to mint at the plan default.
+  async mintDownloadUrl(
+    bucketId: string,
+    fileId: string,
+    ttlSeconds?: number,
+  ): Promise<DownloadUrlData> {
+    const res = await fetch(
+      `${this.baseUrl}/api/v1/buckets/${bucketId}/files/${fileId}/download-url`,
+      {
+        method: 'POST',
+        headers: this.jsonHeaders,
+        body: JSON.stringify(ttlSeconds === undefined ? {} : { ttl: ttlSeconds }),
+      },
+    );
+    const body = await expect<{ data: DownloadUrlData }>(res);
+    return body.data;
+  }
+
+  // Redeem is unauthenticated by design — the signed token in the path is the
+  // credential. `downloadUrlPath` is the relative `/downloads/v1.…` path from
+  // mintDownloadUrl.
+  async redeemDownloadUrl(downloadUrlPath: string): Promise<Uint8Array<ArrayBuffer>> {
+    const res = await fetch(`${this.baseUrl}${downloadUrlPath}`);
     if (!res.ok) {
       const body = await readBody(res);
       throw new ConsoleError(res.status, body, tryParseJson(body));

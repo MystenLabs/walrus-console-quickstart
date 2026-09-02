@@ -317,6 +317,26 @@ const plaintext = await seal.decrypt({ data: ciphertext, sessionKey, txBytes });
 Console's API surface stops at the ciphertext byte stream — decryption is
 fully client-side and never touches Console's backend.
 
+### 10. Optional — mint a signed download URL
+
+To hand the ciphertext to a client that holds no API key, mint a short-lived
+signed link instead of proxying the bytes yourself:
+
+```http
+POST /api/v1/buckets/{bucketId}/files/{fileId}/download-url
+Content-Type: application/json
+
+{ "ttl": 900 }
+```
+
+Response (`200`): `{ "data": { "download_url": "/downloads/v1.…", "expires_at": "…" } }`.
+
+The `download_url` is a relative path on the API host. Redeeming it requires
+**no auth header** — the signed token in the path is the credential — and it
+stops working at `expires_at`. The body is optional; the requested `ttl`
+(seconds) is clamped to the space plan's cap (free: 15 minutes). Mints are
+rate-limited per space and per API key. The redeemed bytes are still Seal
+ciphertext — decryption stays client-side, exactly as in step 9.
 
 ---
 

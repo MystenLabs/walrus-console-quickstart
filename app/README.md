@@ -6,7 +6,7 @@ Same domain code drives **four** runnable surfaces:
 1. **curl walkthrough** — drive the REST manually, dropping into helper scripts
    for the crypto that `curl` can't do.
 2. **Helper CLIs** — `sign-reserve`, `encrypt-file`, `decrypt-file`.
-3. **Automated round-trip** — single script that drives all 10 steps end-to-end.
+3. **Automated round-trip** — single script that drives all 12 steps end-to-end.
 4. **Hono backend** — tiny local HTTP server exposing the flow as proper
    REST routes (the integration model a frontend would call).
 
@@ -23,7 +23,7 @@ app/
       sign-reserve.ts     # CLI: <base64 bytes> → signature
       encrypt-file.ts     # CLI: <plaintextPath> <sealPolicyId> → <…>.enc
       decrypt-file.ts     # CLI: <ciphertextPath> <sealPolicyId> [original] → <…>.dec + MATCH/MISMATCH
-      full-round-trip.ts  # end-to-end: all 10 steps
+      full-round-trip.ts  # end-to-end: all 12 steps
     server/
       index.ts            # Hono backend
   sample.txt              # round-trip plaintext
@@ -151,7 +151,25 @@ curl -sSL -H "$AUTH" -o downloaded.enc \
   "$BASE/api/v1/buckets/$BUCKET_ID/files/$FILE_ID/download"
 ```
 
-### 8 + 9. Decrypt + verify (helper #3), then delete
+### 8. Mint + redeem a signed download URL
+
+The mint returns a relative `/downloads/v1.…` path. Redeeming it needs **no
+auth header** — the signed token in the path is the credential. The requested
+`ttl` (seconds) is clamped to the space plan's cap (free: 15 minutes).
+
+```bash
+SIGNED_URL=$(curl -sS -X POST -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{}' "$BASE/api/v1/buckets/$BUCKET_ID/files/$FILE_ID/download-url" \
+  | jq -r '.data.download_url')
+
+curl -sS -o redeemed.enc "$BASE$SIGNED_URL"
+cmp downloaded.enc redeemed.enc && echo "signed URL bytes match"
+```
+
+### 9 + 10. Decrypt + verify (helper #3), then delete file + bucket
+
+The file delete is an async soft-delete, so the bucket delete can 400 for a
+few seconds — re-run it until it answers 204.
 
 ```bash
 pnpm run decrypt-file downloaded.enc "$SEAL_POLICY_ID" sample.txt
@@ -160,6 +178,10 @@ pnpm run decrypt-file downloaded.enc "$SEAL_POLICY_ID" sample.txt
 curl -sS -X DELETE -H "$AUTH" -o /dev/null -w '%{http_code}\n' \
   "$BASE/api/v1/buckets/$BUCKET_ID/files/$FILE_ID"
 # → 204
+
+curl -sS -X DELETE -H "$AUTH" -o /dev/null -w '%{http_code}\n' \
+  "$BASE/api/v1/buckets/$BUCKET_ID?confirm=true"
+# → 204 (400 while the file delete settles — retry)
 ```
 
 ### Cleanup: stranded or accumulated buckets
@@ -192,8 +214,8 @@ curl -sS -H "$AUTH" "$BASE/api/v1/spaces/$SPACE_ID/buckets" \
 pnpm run full-round-trip
 ```
 
-Logs each of the 10 steps and exits with `Round-trip OK.` after the **MATCH**
-verification + file delete. Smoke test after any local edit.
+Logs each of the 12 steps and exits with `Round-trip OK.` after the **MATCH**
+verification, file delete, and bucket delete. Smoke test after any local edit.
 
 ---
 
@@ -273,13 +295,14 @@ for production code:
 - **`DELETE /api/buckets/:id` can still return 400 from Console.** Even with
   `?confirm=true`, Console 400s if the bucket isn't empty — delete its files
   first. Cleanest target is `pending_policy` (no files possible).
-- **`full-round-trip.ts` does not clean up its bucket.** Only the file is
-  deleted; the bucket stays. Repeated runs accumulate and eventually trip the
-  per-space bucket cap (`422 plan_limit_exceeded` on the next reserve). The
-  script catches that specific error and prints the cleanup snippet; run it
+- **`full-round-trip.ts` cleans up only on success.** The final step deletes
+  the bucket (retrying the 400 while the async file delete settles), but a run
+  that fails earlier leaves its bucket behind. Enough failed runs trip the
+  per-space bucket cap (`422 plan_limit_exceeded` on the next reserve); the
+  script catches that specific error and prints the cleanup snippet — run it
   and retry.
-  _Improve:_ delete the bucket too at the end (or `set -e` a cleanup trap),
-  or pre-clean stale buckets on startup.
+  _Improve:_ wrap the run in a cleanup trap so failed runs also delete their
+  bucket, or pre-clean stale buckets on startup.
 - **No auth on this server.** It binds to `127.0.0.1` and assumes the caller
   is the local frontend.
   _Improve:_ shared-secret header, mTLS, or session cookies before exposing
