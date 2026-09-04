@@ -1,5 +1,5 @@
 import { setTimeout as sleep } from 'node:timers/promises';
-import { API_BASE } from '../config.js';
+import { NETWORK } from '../config.js';
 
 export type SpaceListItem = { id: string; name?: string };
 export type BucketSummary = {
@@ -91,7 +91,7 @@ export class ConsoleClient {
   private readonly pollMaxAttempts: number;
 
   constructor(opts: ConsoleClientOptions) {
-    this.baseUrl = opts.baseUrl ?? API_BASE;
+    this.baseUrl = opts.baseUrl ?? NETWORK.apiBase;
     this.authHeader = { Authorization: `Bearer ${opts.apiKey}` };
     this.jsonHeaders = { ...this.authHeader, 'Content-Type': 'application/json' };
     this.uploadMaxRetries = opts.uploadMaxRetries ?? 20;

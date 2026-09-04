@@ -5,7 +5,7 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
-import { requireEnv } from '../config.js';
+import { CONSOLE_NETWORK, NETWORK, requireEnv } from '../config.js';
 import { ConsoleClient, ConsoleError } from '../lib/console.js';
 import {
   decryptBytes,
@@ -16,10 +16,11 @@ import {
   signReserveBytes,
 } from '../lib/seal.js';
 
-const consoleClient = new ConsoleClient({ apiKey: requireEnv('CONSOLE_API_KEY') });
+const apiKey = requireEnv('CONSOLE_API_KEY');
+const consoleClient = new ConsoleClient({ apiKey });
 const keypair = loadKeypair(requireEnv('CONSOLE_SERVICE_PRIVKEY'));
 const sui = makeSuiClient();
-const seal = makeSealClient(sui);
+const seal = makeSealClient(sui, apiKey);
 
 // Stateless seal_policy_id lookup. Each upload/download fetches the bucket
 // metadata to find the policy id — no in-process cache. Trade-off: one extra
@@ -97,7 +98,7 @@ app.get('/api/buckets/:bucketId/files', async (c) => {
 });
 
 // Encrypt → upload (with mirror_missing_grant retry) → poll until completed.
-// Synchronous: request holds open until the upload finishes (~few seconds to ~1m on testnet).
+// Synchronous: request holds open until the upload finishes (a few seconds to ~1m).
 app.post('/api/buckets/:bucketId/files', async (c) => {
   const bucketId = c.req.param('bucketId');
   const body = await c.req.parseBody();
@@ -149,5 +150,8 @@ app.onError((err, c) => {
 const port = Number(process.env.PORT ?? 3000);
 const hostname = process.env.HOST ?? '127.0.0.1';
 serve({ fetch: app.fetch, port, hostname }, ({ address, port }) => {
-  console.log(`Console demo backend listening on http://${address}:${port}`);
+  console.log(
+    `Console demo backend listening on http://${address}:${port} ` +
+      `(network=${CONSOLE_NETWORK} api=${NETWORK.apiBase})`,
+  );
 });

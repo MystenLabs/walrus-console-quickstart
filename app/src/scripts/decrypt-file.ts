@@ -16,7 +16,7 @@ if (!ciphertextPath || !sealPolicyId) {
 }
 
 const suiClient = makeSuiClient();
-const seal = makeSealClient(suiClient);
+const seal = makeSealClient(suiClient, requireEnv('CONSOLE_API_KEY'));
 const keypair = loadKeypair(requireEnv('CONSOLE_SERVICE_PRIVKEY'));
 
 const ciphertext = await readFile(ciphertextPath);

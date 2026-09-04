@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { timingSafeEqual } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { requireEnv } from '../config.js';
+import { CONSOLE_NETWORK, NETWORK, requireEnv } from '../config.js';
 import { ConsoleClient, ConsoleError } from '../lib/console.js';
 import {
   decryptBytes,
@@ -17,10 +17,13 @@ const SAMPLE_PATH = new URL('../../sample.txt', import.meta.url);
 const BUCKET_NAME = `round-trip-${Date.now()}`;
 const UPLOAD_NAME = 'sample.txt.enc';
 
-const consoleClient = new ConsoleClient({ apiKey: requireEnv('CONSOLE_API_KEY') });
+const apiKey = requireEnv('CONSOLE_API_KEY');
+const consoleClient = new ConsoleClient({ apiKey });
 const keypair = loadKeypair(requireEnv('CONSOLE_SERVICE_PRIVKEY'));
 const sui = makeSuiClient();
-const seal = makeSealClient(sui);
+const seal = makeSealClient(sui, apiKey);
+
+console.log(`network=${CONSOLE_NETWORK} api=${NETWORK.apiBase}`);
 
 function step(n: number, label: string): void {
   console.log(`\n[${n}/12] ${label}`);
@@ -43,7 +46,7 @@ try {
         `final step leave their bucket behind. Delete empty buckets in the ` +
         `space and retry:\n\n` +
         `  set -a; source .env; set +a\n` +
-        `  export BASE="https://api.testnet.console.walrus.xyz"\n` +
+        `  export BASE="${NETWORK.apiBase}"\n` +
         `  export AUTH="Authorization: Bearer $CONSOLE_API_KEY"\n` +
         `  curl -sS -H "$AUTH" "$BASE/api/v1/spaces/${space.id}/buckets" \\\n` +
         `    | jq -r '.buckets[].id' \\\n` +

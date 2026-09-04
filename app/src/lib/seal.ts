@@ -6,15 +6,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import { fromBase64, fromHex } from '@mysten/sui/utils';
 import { EncryptedObject, SealClient, SessionKey } from '@mysten/seal';
 
-import {
-  BUCKET_REGISTRY_ID,
-  FULLNODE_URL,
-  LATEST_PACKAGE_ID,
-  ORIGINAL_PACKAGE_ID,
-  SEAL_KEY_SERVER_OBJECT_IDS,
-  SEAL_THRESHOLD,
-  SUI_NETWORK,
-} from '../config.js';
+import { NETWORK, SEAL_THRESHOLD, sealAggregatorUrl } from '../config.js';
 
 // On-chain `seal_approve` expects `(vector<u8> id, &BucketRegistry, &PermissionedGroup)`
 // where `id` deserializes as this struct via BCS. Keep field order in sync with
@@ -30,13 +22,26 @@ export function loadKeypair(suiPrivkey: string): Ed25519Keypair {
 }
 
 export function makeSuiClient(): SuiGrpcClient {
-  return new SuiGrpcClient({ network: SUI_NETWORK, baseUrl: FULLNODE_URL });
+  return new SuiGrpcClient({ network: NETWORK.suiNetwork, baseUrl: NETWORK.fullnodeUrl });
 }
 
-export function makeSealClient(suiClient: SuiGrpcClient): SealClient {
+// Key fetches go to Console's fetch_key proxy, which authenticates the API key
+// and relays the request to Seal's aggregator. The SDK sends the
+// `apiKeyName: apiKey` pair as a request header, so the pair below becomes
+// `Authorization: Bearer hbr_…`. `verifyKeyServers` is skipped by the SDK for
+// committee servers, so it stays off.
+export function makeSealClient(suiClient: SuiGrpcClient, apiKey: string): SealClient {
   return new SealClient({
     suiClient,
-    serverConfigs: SEAL_KEY_SERVER_OBJECT_IDS.map((objectId) => ({ objectId, weight: 1 })),
+    serverConfigs: [
+      {
+        objectId: NETWORK.sealCommitteeObjectId,
+        weight: 1,
+        aggregatorUrl: sealAggregatorUrl(),
+        apiKeyName: 'Authorization',
+        apiKey: `Bearer ${apiKey}`,
+      },
+    ],
     verifyKeyServers: false,
   });
 }
@@ -66,7 +71,7 @@ export async function encryptBytes(
   const { id } = buildIdentity(sealPolicyId);
   const { encryptedObject } = await seal.encrypt({
     threshold: SEAL_THRESHOLD,
-    packageId: ORIGINAL_PACKAGE_ID,
+    packageId: NETWORK.originalPackageId,
     id,
     data: plaintext,
   });
@@ -80,10 +85,10 @@ export function buildSealApproveTxBytes(
 ): Promise<Uint8Array> {
   const tx = new Transaction();
   tx.moveCall({
-    target: `${LATEST_PACKAGE_ID}::bucket_policy::seal_approve`,
+    target: `${NETWORK.latestPackageId}::bucket_policy::seal_approve`,
     arguments: [
       tx.pure.vector('u8', Array.from(idBytes)),
-      tx.object(BUCKET_REGISTRY_ID),
+      tx.object(NETWORK.bucketRegistryId),
       tx.object(sealPolicyId),
     ],
   });
@@ -97,7 +102,7 @@ export async function createSessionKey(
 ): Promise<SessionKey> {
   return SessionKey.create({
     address: keypair.toSuiAddress(),
-    packageId: ORIGINAL_PACKAGE_ID,
+    packageId: NETWORK.originalPackageId,
     ttlMin,
     suiClient,
     signer: keypair,
