@@ -2,8 +2,8 @@
 
 Everything you need to start building on the **Console API**.
 
-> **Alpha · Testnet only.** Endpoint shapes may change before mainnet GA. Do not put
-> production data behind this.
+> **Alpha.** Console runs on Sui **mainnet** (default) and Sui **testnet** (staging, for
+> QA and testing). Endpoint shapes can change before GA.
 
 ---
 
@@ -47,9 +47,11 @@ Prerequisites: a way to sign in to the web app to mint an API key — Google (vi
 is the quickest path; a Sui wallet also works — plus `curl`/Postman or Node.js. See
 [`QUICKSTART.md`](QUICKSTART.md) for exact versions.
 
-1. Sign in at **[testnet.console.walrus.xyz](https://testnet.console.walrus.xyz/)** —
+1. Sign in at **[console.walrus.xyz](https://console.walrus.xyz/)** —
    Google (via zkLogin) is the quickest path; a Sui wallet also works. Your account and a
-   Personal Space are provisioned automatically.
+   Personal Space are provisioned automatically. For the staging environment, sign in at
+   [testnet.console.walrus.xyz](https://testnet.console.walrus.xyz/) instead. API keys are
+   per network.
 2. **Settings → API Keys → Create API Key**, pick **Read & Write**
    (`read_write`), and copy the `hbr_…` key — it is shown **once**.
 3. Follow [`QUICKSTART.md`](QUICKSTART.md) to create a Seal-encrypted bucket and round-trip
@@ -57,21 +59,25 @@ is the quickest path; a Sui wallet also works — plus `curl`/Postman or Node.js
 
 ### Poke the API with Postman
 
-Import both files from [`postman/`](postman/) into Postman Desktop:
+Import the collection and one environment from [`postman/`](postman/) into Postman Desktop:
 
 - `postman/console.postman_collection.json`
-- `postman/console.postman_environment.json`
+- `postman/console.postman_environment.json` (mainnet)
+- `postman/console.testnet.postman_environment.json` (testnet)
 
-Paste your `hbr_…` key into the `bearerToken` environment variable. `baseUrl` defaults to
-`https://api.testnet.console.walrus.xyz`.
+Paste your `hbr_…` key into the `bearerToken` environment variable. `baseUrl` is
+`https://api.console.walrus.xyz` in the mainnet environment and
+`https://api.testnet.console.walrus.xyz` in the testnet one.
 
 ## Hosted docs
 
 The same docs are served live from the API:
 
-- OpenAPI viewer (Scalar): <https://api.testnet.console.walrus.xyz/docs/openapi>
-- OpenAPI spec (raw): <https://api.testnet.console.walrus.xyz/openapi.yaml>
-- Docs index: <https://api.testnet.console.walrus.xyz/docs>
+- OpenAPI viewer (Scalar): <https://api.console.walrus.xyz/docs/openapi>
+- OpenAPI spec (raw): <https://api.console.walrus.xyz/openapi.yaml>
+- Docs index: <https://api.console.walrus.xyz/docs>
+
+The testnet API serves the same pages at `https://api.testnet.console.walrus.xyz`.
 
 ## Questions / issues
 

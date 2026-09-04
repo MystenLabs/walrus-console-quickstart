@@ -1,6 +1,8 @@
 # Console API Quickstart
 
-> **Alpha.** Testnet only. Endpoint shapes may change before mainnet GA.
+> **Alpha.** Console runs on Sui mainnet and Sui testnet. Mainnet is the
+> default. Testnet is the staging environment for QA and testing. Endpoint
+> shapes can change before GA.
 
 A "hello world" tour of the Console API: sign up, create a Seal-encrypted
 bucket, then upload + download a file. In alpha, all bucket creation goes
@@ -8,18 +10,43 @@ through the private (Seal-encrypted) flow — public bucket creation is
 disabled at the API boundary.
 
 > **Hosted versions.** This guide is also served live from the API:
-> - Rendered HTML: [`/docs/quickstart`](https://api.testnet.console.walrus.xyz/docs/quickstart)
-> - Raw markdown (LLM/`curl`-friendly): [`/docs/quickstart.md`](https://api.testnet.console.walrus.xyz/docs/quickstart.md)
-> - OpenAPI viewer (Scalar): [`/docs/openapi`](https://api.testnet.console.walrus.xyz/docs/openapi)
-> - OpenAPI spec (raw): [`/openapi.yaml`](https://api.testnet.console.walrus.xyz/openapi.yaml) · [`/openapi.json`](https://api.testnet.console.walrus.xyz/openapi.json)
-> - Docs index: [`/docs`](https://api.testnet.console.walrus.xyz/docs)
+> - Rendered HTML: [`/docs/quickstart`](https://api.console.walrus.xyz/docs/quickstart)
+> - Raw markdown (LLM/`curl`-friendly): [`/docs/quickstart.md`](https://api.console.walrus.xyz/docs/quickstart.md)
+> - OpenAPI viewer (Scalar): [`/docs/openapi`](https://api.console.walrus.xyz/docs/openapi)
+> - OpenAPI spec (raw): [`/openapi.yaml`](https://api.console.walrus.xyz/openapi.yaml) · [`/openapi.json`](https://api.console.walrus.xyz/openapi.json)
+> - Docs index: [`/docs`](https://api.console.walrus.xyz/docs)
+>
+> The testnet API serves the same pages at `https://api.testnet.console.walrus.xyz`.
+
+---
+
+## Networks
+
+Console runs on two Sui networks. API keys, buckets, and on-chain objects are
+per network: a key minted on one network does not work on the other.
+
+| | Mainnet (default) | Testnet (staging, QA) |
+| --- | --- | --- |
+| Web app | <https://console.walrus.xyz> | <https://testnet.console.walrus.xyz> |
+| API host | `https://api.console.walrus.xyz` | `https://api.testnet.console.walrus.xyz` |
+| Sui fullnode | `https://fullnode.mainnet.sui.io:443` | `https://fullnode.testnet.sui.io:443` |
+| Bucket-policy package (original = latest) | `0xb8d5b1cade7917190c47b8abfc789f527389fc021a8963c22755bcc1b539786c` | `0xf9b261d4c0dbcf845d79f864e85581f9686fd6de9f4770ba1d77489d67f7833c` |
+| `BucketRegistry` (shared) | `0x871f3d0341f36101ff0b30cd01dbe363f8d89d7f004df80e8084752d2f496958` | `0x902841af0cd25c5f8dee4980fe2942687c9ca80db56d77ff67a4ba6d9d97b9cf` |
+| Seal committee `KeyServer` | `0x686098f1439237fff9f36b99c7329683c22979d2005c2465cb891acb012a7595` | `0xb012378c9f3799fb5b1a7083da74a4069e3c3f1c93de0b27212a5799ce1e1e98` |
+
+Use mainnet for real data. Use testnet to test an integration before you point
+it at mainnet. The code in this guide reads the row for one network. The
+[`app/`](app/) reference keeps both rows in `app/src/config.ts` and selects
+one with `CONSOLE_NETWORK` in `.env`.
 
 ---
 
 ## 1. Hello world — sign up via zkLogin
 
-1. Visit [testnet.console.walrus.xyz/](https://testnet.console.walrus.xyz/) and sign in with Google (via zkLogin) — or a Sui wallet, if you prefer.
+1. Visit [console.walrus.xyz](https://console.walrus.xyz/) and sign in with Google (via zkLogin) — or a Sui wallet, if you prefer.
    Your account and a **Personal Space** are provisioned automatically.
+   For the staging environment, use [testnet.console.walrus.xyz](https://testnet.console.walrus.xyz/)
+   instead. The key you mint there works only against the testnet API host.
 2. Open **Settings → API Keys → Create API Key**, name the key, pick a
    **Permissions** option, submit.
    - **`read_write`** — required for any state change: create/delete
@@ -34,12 +61,15 @@ disabled at the API boundary.
 3. On the reveal screen, copy the `hbr_…` Console API key. It is shown
    **once** — Console cannot recover it afterwards. Store it like an AWS
    secret access key.
-4. (Optional) Import the curated Postman pair into Postman Desktop:
+4. (Optional) Import the curated Postman collection and one environment into
+   Postman Desktop:
    - `postman/console.postman_collection.json`
-   - `postman/console.postman_environment.json`
+   - `postman/console.postman_environment.json` (mainnet)
+   - `postman/console.testnet.postman_environment.json` (testnet)
 
-   Paste your `hbr_…` key into the `bearerToken` env variable. `baseUrl`
-   defaults to `https://api.testnet.console.walrus.xyz`.
+   Paste your `hbr_…` key into the `bearerToken` env variable. `baseUrl` is
+   `https://api.console.walrus.xyz` in the mainnet environment and
+   `https://api.testnet.console.walrus.xyz` in the testnet one.
 
 Every request below carries `Authorization: Bearer hbr_…`.
 
@@ -182,27 +212,43 @@ import { SealClient } from '@mysten/seal';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { bcs } from '@mysten/sui/bcs';
 
-// Console's bucket-policy package + Seal's three testnet key servers (threshold 2).
+// Values below are the mainnet row of the Networks table. Swap in the testnet
+// row for staging.
+//
 // `ORIGINAL` here means the *original-id* of the upgradeable package
 // (its original/canonical published id). Seal pins identity
 // derivation to the original/canonical package id, so encrypt MUST use this
 // value even after the package has been upgraded — otherwise an upgrade would
 // invalidate every previously-encrypted blob's DEK.
+const CONSOLE_API_BASE = 'https://api.console.walrus.xyz';
 const CONSOLE_ORIGINAL_PACKAGE_ID =
-  '0xf9b261d4c0dbcf845d79f864e85581f9686fd6de9f4770ba1d77489d67f7833c';
-const SEAL_KEY_SERVER_OBJECT_IDS = [
-  '0x6068c0acb197dddbacd4746a9de7f025b2ed5a5b6c1b1ab44dade4426d141da2',
-  '0x164ac3d2b3b8694b8181c13f671950004765c23f270321a45fdd04d40cccf0f2',
-  '0x9c949e53c36ab7a9c484ed9e8b43267a77d4b8d70e79aa6b39042e3d4c434105',
-];
+  '0xb8d5b1cade7917190c47b8abfc789f527389fc021a8963c22755bcc1b539786c';
+// Seal's decentralized committee for this network. One KeyServer object stands
+// for the whole committee, so the client-side threshold is 1. The committee
+// enforces its own threshold internally (mainnet 5-of-8, testnet 3-of-5).
+const SEAL_COMMITTEE_OBJECT_ID =
+  '0x686098f1439237fff9f36b99c7329683c22979d2005c2465cb891acb012a7595';
 
 const sui = new SuiGrpcClient({
-  network: 'testnet',
-  baseUrl: 'https://fullnode.testnet.sui.io:443',
+  network: 'mainnet',
+  baseUrl: 'https://fullnode.mainnet.sui.io:443',
 });
+// Key fetches do not go to Seal's aggregator directly: the aggregator needs a
+// credential that Console holds server-side. The SDK posts each fetch to
+// `${aggregatorUrl}/v1/fetch_key`, so point it at Console's proxy and
+// authenticate with the same `hbr_…` API key. Console adds the aggregator
+// credential and relays the response.
 const seal = new SealClient({
   suiClient: sui,
-  serverConfigs: SEAL_KEY_SERVER_OBJECT_IDS.map((objectId) => ({ objectId, weight: 1 })),
+  serverConfigs: [
+    {
+      objectId: SEAL_COMMITTEE_OBJECT_ID,
+      weight: 1,
+      aggregatorUrl: `${CONSOLE_API_BASE}/api/v1/seal/aggregator`,
+      apiKeyName: 'Authorization',
+      apiKey: `Bearer ${process.env.CONSOLE_API_KEY}`,
+    },
+  ],
   verifyKeyServers: false,
 });
 
@@ -216,7 +262,7 @@ const nonce = Array.from(crypto.getRandomValues(new Uint8Array(32)));
 const id = SealIdentity.serialize({ policyObjectId: sealPolicyId, nonce }).toHex();
 
 const { encryptedObject } = await seal.encrypt({
-  threshold: 2,
+  threshold: 1,
   packageId: CONSOLE_ORIGINAL_PACKAGE_ID,
   id,
   data: plaintextBytes, // Uint8Array
@@ -249,7 +295,7 @@ GET /api/v1/buckets/{bucketId}/files/{fileId}/status
 
 Returns `{ "data": { "state": "queued" | "active" | "completed" | "failed" } }`.
 Poll every second or two until `state === "completed"`. Typical completion is
-under 30 seconds on testnet.
+under 30 seconds.
 
 ### 9. Download → decrypt locally
 
@@ -275,12 +321,13 @@ import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { fromHex } from '@mysten/sui/utils';
 
+// Mainnet row of the Networks table again. Swap in the testnet row for staging.
 // Latest Console bucket-policy package — host of the `seal_approve` move call.
 const CONSOLE_LATEST_PACKAGE_ID =
-  '0xf9b261d4c0dbcf845d79f864e85581f9686fd6de9f4770ba1d77489d67f7833c';
+  '0xb8d5b1cade7917190c47b8abfc789f527389fc021a8963c22755bcc1b539786c';
 // Shared BucketRegistry — `seal_approve` reads its pause + version state.
 const CONSOLE_BUCKET_REGISTRY_ID =
-  '0x902841af0cd25c5f8dee4980fe2942687c9ca80db56d77ff67a4ba6d9d97b9cf';
+  '0x871f3d0341f36101ff0b30cd01dbe363f8d89d7f004df80e8084752d2f496958';
 
 const { secretKey } = decodeSuiPrivateKey(process.env.CONSOLE_SERVICE_PRIVKEY);
 const keypair = Ed25519Keypair.fromSecretKey(secretKey);
@@ -310,12 +357,15 @@ const sessionKey = await SessionKey.create({
   signer: keypair,
 });
 
-// 3. Decrypt — SealClient fetches threshold key shares and reconstructs the DEK locally.
+// 3. Decrypt — SealClient fetches the key share through Console's proxy
+//    (same `seal` client as step 6) and reconstructs the DEK locally.
 const plaintext = await seal.decrypt({ data: ciphertext, sessionKey, txBytes });
 ```
 
-Console's API surface stops at the ciphertext byte stream — decryption is
-fully client-side and never touches Console's backend.
+Console's API surface stops at the ciphertext byte stream. The only decrypt
+traffic that touches Console is the `fetch_key` proxy call, which Console
+relays to the Seal aggregator without reading the result. The DEK is
+reconstructed and the plaintext decrypted on your side.
 
 ### 10. Optional — mint a signed download URL
 

@@ -15,7 +15,7 @@ Same domain code drives **four** runnable surfaces:
 ```
 app/
   src/
-    config.ts             # API base, package ids, Seal config, requireEnv()
+    config.ts             # per-network table (API host, package ids, Seal committee), requireEnv()
     lib/
       seal.ts             # Sui signing, Seal encrypt/decrypt, SessionKey
       console.ts           # Console REST client (used by scripts and server)
@@ -52,6 +52,29 @@ pnpm run typecheck
 
 The pnpm scripts auto-load `.env` via `tsx --env-file=.env …`.
 
+### Networks
+
+`src/config.ts` holds one row per Sui network: API host, fullnode, package ids,
+`BucketRegistry` id, and the Seal committee id. `CONSOLE_NETWORK` in `.env`
+selects the row:
+
+| `CONSOLE_NETWORK` | Use | API host |
+| --- | --- | --- |
+| `mainnet` (default) | production, beta users | `https://api.console.walrus.xyz` |
+| `testnet` | staging, QA, testing | `https://api.testnet.console.walrus.xyz` |
+
+API keys are per network. A key minted at `console.walrus.xyz` answers `401`
+on the testnet host, and the reverse. A shell variable wins over `.env`, so
+one-off runs can switch without an edit:
+
+```bash
+CONSOLE_NETWORK=testnet pnpm run full-round-trip
+```
+
+Seal key fetches go through Console's `fetch_key` proxy on the selected API
+host, authenticated with the same `hbr_…` key. That is why `encrypt-file` and
+`decrypt-file` also read `CONSOLE_API_KEY`.
+
 ---
 
 ## 1. Curl walkthrough
@@ -61,9 +84,12 @@ scripts run the helper CLIs. Source your `.env` first:
 
 ```bash
 set -a; source .env; set +a
-export BASE="https://api.testnet.console.walrus.xyz"
+export BASE="https://api.console.walrus.xyz"   # testnet: https://api.testnet.console.walrus.xyz
 export AUTH="Authorization: Bearer $CONSOLE_API_KEY"
 ```
+
+`BASE` must match `CONSOLE_NETWORK` in `.env`, because the helper CLIs read
+their network from there.
 
 ### 1. List spaces
 
@@ -276,7 +302,7 @@ Deliberate "keep it simple" trade-offs in this reference, not recommendations
 for production code:
 
 - **Synchronous upload.** `POST /api/buckets/:id/files` holds the HTTP request
-  open until Console reports `completed` (≤~1m on testnet today). Frontend UX
+  open until Console reports `completed` (≤~1m today). Frontend UX
   is a single request, but the connection has to survive that long.
   _Improve:_ return `202 {file_id}` immediately and expose
   `GET /api/buckets/:id/files/:fileId/status` so the frontend polls.
