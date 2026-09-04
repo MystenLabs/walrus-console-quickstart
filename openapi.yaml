@@ -6,10 +6,10 @@ info:
     Curated external API surface for third-party developers. Authenticate every request with
     `Authorization: Bearer hbr_…` (API keys are minted in the Console web app).
 servers:
-  - url: https://api.testnet.console.walrus.xyz
-    description: Testnet
   - url: https://api.console.walrus.xyz
     description: Mainnet
+  - url: https://api.testnet.console.walrus.xyz
+    description: Testnet (staging)
 tags:
   - name: Spaces
     description: Space management

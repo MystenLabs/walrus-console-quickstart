@@ -4604,7 +4604,7 @@
   "variable": [
     {
       "key": "baseUrl",
-      "value": "https://api.testnet.console.walrus.xyz"
+      "value": "https://api.console.walrus.xyz"
     },
     {
       "key": "bearerToken",
