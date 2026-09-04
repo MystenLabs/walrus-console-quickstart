@@ -43,7 +43,7 @@ one with `CONSOLE_NETWORK` in `.env`.
 
 ## 1. Hello world — sign up via zkLogin
 
-1. Visit [console.walrus.xyz](https://console.walrus.xyz/) and sign in with Google (via zkLogin) — or a Sui wallet, if you prefer.
+1. Visit [console.walrus.xyz](https://console.walrus.xyz/) and sign in with Google or Apple(via zkLogin),
    Your account and a **Personal Space** are provisioned automatically.
    For the staging environment, use [testnet.console.walrus.xyz](https://testnet.console.walrus.xyz/)
    instead. The key you mint there works only against the testnet API host.

@@ -43,13 +43,12 @@ If you can call a REST endpoint, you can build on Console.
 
 ## Quickstart
 
-Prerequisites: a way to sign in to the web app to mint an API key — Google (via zkLogin)
-is the quickest path; a Sui wallet also works — plus `curl`/Postman or Node.js. See
-[`QUICKSTART.md`](QUICKSTART.md) for exact versions.
+Prerequisites: a way to sign in to the web app to mint an API key — Google or Apple(via zkLogin)
+— plus `curl`/Postman or Node.js. See [`QUICKSTART.md`](QUICKSTART.md) for exact versions.
 
 1. Sign in at **[console.walrus.xyz](https://console.walrus.xyz/)** —
-   Google (via zkLogin) is the quickest path; a Sui wallet also works. Your account and a
-   Personal Space are provisioned automatically. For the staging environment, sign in at
+   Google or Apple (via zkLogin). Your account and a Personal Space
+    are provisioned automatically. For the staging environment, sign in at
    [testnet.console.walrus.xyz](https://testnet.console.walrus.xyz/) instead. API keys are
    per network.
 2. **Settings → API Keys → Create API Key**, pick **Read & Write**
