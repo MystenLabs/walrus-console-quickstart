@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "0019b1e2-8680-45b1-9986-d148542fc678",
     "name": "Console API (hackathon)",
-    "description": "Curated Bearer-only subset of the Console API for hackathon developers. The full internal collection lives at docs/Walrus Console API.postman_collection.json.",
+    "description": "Curated Bearer-only subset of the Console API for hackathon developers. The full internal collection lives in the Walrus Console repo under docs/.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "30684365"
   },
@@ -18,8 +18,8 @@
   },
   "item": [
     {
-      "name": "alpha (bearer)",
-      "description": "Endpoints an API-key consumer (alpha pod) actually hits. Auth is `Authorization: Bearer {{bearerToken}}` everywhere.",
+      "name": "bearer",
+      "description": "Endpoints that an API-key consumer calls. Auth is `Authorization: Bearer {{bearerToken}}` everywhere.",
       "item": [
         {
           "name": "spaces (read)",
@@ -298,7 +298,7 @@
                     }
                   ],
                   "cookie": [],
-                  "body": "{\n  \"pagination\": {\n    \"limit\": 6027,\n    \"hasMore\": true,\n    \"nextCursor\": \"string\"\n  }\n}"
+                  "body": "{\n  \"pagination\": {\n    \"limit\": 20,\n    \"has_more\": true,\n    \"next_cursor\": \"string\"\n  }\n}"
                 },
                 {
                   "name": "Invalid request — malformed space UUID or query parameters",
@@ -571,7 +571,7 @@
         },
         {
           "name": "buckets",
-          "description": "Bucket lifecycle for hackathon developers. Public buckets are created synchronously; private (Seal-encrypted) buckets need a reserve → (optional Enoki sponsor/execute) → finalize handshake. Delete + rename ops live at this folder's top level since they're scope-agnostic.",
+          "description": "Bucket lifecycle. All buckets are private (Seal-encrypted) and need a reserve → sign → finalize handshake. Delete and rename live at the top level of this folder.",
           "item": [
             {
               "name": "List buckets in a space",
@@ -784,7 +784,7 @@
             },
             {
               "name": "Create bucket flow",
-              "description": "Reserve → sign → finalize handshake for private (Seal-encrypted) buckets. (1) Reserve to get the Enoki-sponsored tx bytes; the Reserve post-response script signs them locally (inlined tweetnacl + blakejs) and stashes the signature. (2) Finalize submits the signature so Console can broadcast the sponsored tx and activate the bucket. Public bucket creation is disabled at the API boundary in alpha.",
+              "description": "Reserve → sign → finalize handshake for private (Seal-encrypted) buckets. (1) Reserve to get the Enoki-sponsored tx bytes; the Reserve post-response script signs them locally (inlined tweetnacl + blakejs) and stashes the signature. (2) Finalize submits the signature so Console can broadcast the sponsored tx and activate the bucket. Public bucket creation is disabled at the API boundary.",
               "item": [
                 {
                   "name": "1. Reserve",
@@ -840,7 +840,7 @@
                         }
                       ]
                     },
-                    "description": "Reserve a private bucket. Returns bucket_id, bytes (base64 Enoki-sponsored Sui tx with your service-key address as sender), digest, and state=pending. Sign bytes with consoleServicePrivateKey, then call 2. Finalize. Your service key needs no SUI balance — gas is sponsored by Console."
+                    "description": "Reserve a private bucket. Returns bucket_id, bytes (base64 Enoki-sponsored Sui tx with your service-key address as sender), digest, and provisioning_state=pending_policy. Sign bytes with consoleServicePrivateKey, then call 2. Finalize. Your service key needs no SUI balance — gas is sponsored by Console."
                   },
                   "response": [],
                   "event": [
@@ -2569,7 +2569,7 @@
                         }
                       ]
                     },
-                    "description": "Finalize the private bucket by submitting your signature over the reserved tx bytes from 1. Reserve (same Reserve → Sign → Finalize flow as `api/scripts/e2e-private-bucket.ts`). Signing now happens in 1. Reserve's post-response script, which stores the Sui signature envelope in `reservedSignature`; this request just submits it. Console executes the sponsored tx server-side and returns `{ bucket_id, seal_policy_id, state: \"active\" }`."
+                    "description": "Finalize the private bucket by submitting your signature over the reserved tx bytes from 1. Reserve (same Reserve → Sign → Finalize flow as `app/src/scripts/full-round-trip.ts`). Signing happens in 1. Reserve's post-response script, which stores the Sui signature envelope in `reservedSignature`; this request just submits it. Console executes the sponsored tx server-side and returns `{ bucket_id, seal_policy_id, provisioning_state: \"active\" }`."
                   },
                   "response": [],
                   "event": [
@@ -2616,15 +2616,15 @@
                           "pm.test('bucket_id matches privateBucketId', () => {",
                           "  pm.expect(body.bucket_id).to.eql(pm.collectionVariables.get('privateBucketId'));",
                           "});",
-                          "pm.test('state is active', () => {",
-                          "  pm.expect(body.state).to.eql('active');",
+                          "pm.test('provisioning_state is active', () => {",
+                          "  pm.expect(body.provisioning_state).to.eql('active');",
                           "});",
                           "pm.test('seal_policy_id returned', () => {",
                           "  pm.expect(body).to.have.property('seal_policy_id');",
                           "});",
                           "pm.collectionVariables.set('sealPolicyId', body.seal_policy_id);",
                           "if (pm.response.code === 200) {",
-                          "  console.log('Finalize OK — privateBucketId =', body.bucket_id, 'sealPolicyId =', body.seal_policy_id, 'state =', body.state);",
+                          "  console.log('Finalize OK — privateBucketId =', body.bucket_id, 'sealPolicyId =', body.seal_policy_id, 'provisioning_state =', body.provisioning_state);",
                           "} else {",
                           "  console.log('Finalize non-200 body =', body);",
                           "}"
@@ -2675,7 +2675,7 @@
                     }
                   ]
                 },
-                "description": "Delete a bucket (`DELETE /buckets/:id?confirm=true`). Requires `confirm=true`. Cascades: enqueues removal of the bucket's files and blobs. Returns 204."
+                "description": "Delete a bucket (`DELETE /buckets/:id?confirm=true`). Requires `confirm=true`. Returns 204. Returns 400 if the bucket is not empty (files still present or storage in use). Delete the files first. File delete is asynchronous, so retry the 400 for a few seconds."
               },
               "response": [],
               "event": [
@@ -2684,8 +2684,8 @@
                   "script": {
                     "type": "text/javascript",
                     "exec": [
-                      "// Teardown — delete the bucket 'Create bucket in a space' made, so Newman",
-                      "// leaves no e2e-postman-* buckets behind (they'd eat the 5-bucket cap).",
+                      "// Teardown — delete the bucket that '1. Reserve' made, so Newman",
+                      "// leaves no e2e-private-* buckets behind (they count toward the per-space bucket cap).",
                       "pm.test('bucket teardown delete succeeded (<300)', () => pm.expect(pm.response.code).to.be.below(300));"
                     ]
                   }
@@ -2798,14 +2798,14 @@
                     {
                       "key": "file",
                       "type": "file",
-                      "src": "docs/postman-fixtures/upload-sample.txt",
+                      "src": "postman/upload-sample.txt",
                       "description": "Binary file payload (multipart/form-data). Required."
                     },
                     {
                       "key": "name",
                       "type": "text",
                       "value": "upload-sample.txt",
-                      "description": "Display name for the file. Required."
+                      "description": "Display name for the file. Optional."
                     },
                     {
                       "key": "metadata",
@@ -2836,7 +2836,7 @@
                     }
                   ]
                 },
-                "description": "Upload a file to a bucket as `multipart/form-data`. **POST**. Accepts both `bearerAuth` and `cookieAuth`. Returns the upload job; poll `GET /api/v1/buckets/{id}/files/{fileId}/status` until ready."
+                "description": "Upload a file to a bucket as `multipart/form-data`. **POST**. Returns the upload job. Poll `GET /api/v1/buckets/{id}/files/{fileId}/status` until `state` is `completed`. Right after Finalize, this can return `403 mirror_missing_grant` while the ACL indexer catches up. Send it again every ~3s (up to 20 attempts). For private buckets, upload Seal ciphertext (see `app/src/lib/seal.ts`)."
               },
               "response": [],
               "event": [
@@ -3177,7 +3177,7 @@
                       "if (state === 'failed') {",
                       "  pm.collectionVariables.set('statusPollTries', 0);",
                       "  console.warn('upload job FAILED — likely the daily funding cap or the worker not finalizing the Walrus push. Skipping the file-op assertions and jumping to teardown (environmental, not a contract failure).');",
-                      "  postman.setNextRequest(\"Delete bucket (teardown \\u2014 removes the bucket this run created)\");",
+                      "  postman.setNextRequest('Delete bucket');",
                       "} else if (state !== 'completed' && tries < 20) {",
                       "  pm.collectionVariables.set('statusPollTries', tries + 1);",
                       "  postman.setNextRequest('Get upload job status'); // poll until terminal",
@@ -3236,7 +3236,7 @@
                     }
                   ]
                 },
-                "description": "Stream the raw file content. Returns the file with appropriate Content-Type and Content-Disposition headers. Private/authenticated content is never cached by shared proxies."
+                "description": "Stream the raw file content. Always served as `application/octet-stream` with `Content-Disposition: attachment`. Private/authenticated content is never cached by shared proxies. On deployments that serve user content from its own hostname this answers 307 to that host instead of bytes — Postman follows redirects by default; curl needs -L. The redirect target is single-use and short-lived. Mint a durable link with POST .../download-url."
               },
               "response": [
                 {
@@ -3639,6 +3639,82 @@
                       "    console.warn('Download still 404 after polling — the async upload has not landed on Walrus yet (worker incomplete). Not a contract failure; the real decrypt-download is covered by the end-to-end suite.');",
                       "  }",
                       "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Mint signed download URL",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{bearerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ttl\": 900\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/buckets/:id/files/:fileId/download-url",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "buckets",
+                    ":id",
+                    "files",
+                    ":fileId",
+                    "download-url"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "{{bucketId}}",
+                      "description": "Bucket UUID"
+                    },
+                    {
+                      "key": "fileId",
+                      "value": "{{fileId}}",
+                      "description": "File UUID"
+                    }
+                  ]
+                },
+                "description": "Mint a short-lived HMAC-signed download URL. The returned data.download_url is a relative path (/downloads/v1.<payload>.<sig>) redeemable on {{baseUrl}} without authentication until data.expires_at. The body is optional — omit it to mint at the plan-default TTL; the requested ttl (seconds) is clamped to the space plan's cap (free 15m, starter/pro 1h, business 24h). Mints are rate-limited per space and per API key. This replaces the removed GET .../download?signed_url=true form."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 with signed URL', () => {",
+                      "  pm.response.to.have.status(200);",
+                      "  const body = pm.response.json();",
+                      "  pm.expect(body.data).to.have.property('download_url');",
+                      "  pm.expect(body.data).to.have.property('expires_at');",
+                      "  pm.collectionVariables.set('signedDownloadUrl', body.data.download_url);",
+                      "});"
                     ]
                   }
                 }
@@ -4085,7 +4161,7 @@
                     }
                   ],
                   "cookie": [],
-                  "body": "{\n  \"pagination\": {\n    \"limit\": 6027,\n    \"hasMore\": true,\n    \"nextCursor\": \"string\"\n  }\n}"
+                  "body": "{\n  \"pagination\": {\n    \"limit\": 20,\n    \"has_more\": true,\n    \"next_cursor\": \"string\"\n  }\n}"
                 },
                 {
                   "name": "Not authenticated",
@@ -4528,7 +4604,7 @@
   "variable": [
     {
       "key": "baseUrl",
-      "value": "https://api.testnet.console.walrus.xyz"
+      "value": "https://api.console.walrus.xyz"
     },
     {
       "key": "bearerToken",
@@ -4546,7 +4622,13 @@
       "key": "consoleServicePrivateKey",
       "value": "",
       "type": "string",
-      "description": "Service-account private key — shown once on POST /api/v1/api-keys alongside the hbr_ token. Not sent in HTTP headers. Used CLIENT-SIDE to Seal-decrypt private bucket downloads. Referred to as CONSOLE_SERVICE_PRIVATE_KEY."
+      "description": "Service-account private key — shown once on POST /api/v1/api-keys alongside the hbr_ token. Not sent in HTTP headers. Used CLIENT-SIDE to Seal-decrypt private bucket downloads. Referred to as CONSOLE_SERVICE_PRIVKEY in the app's .env."
+    },
+    {
+      "key": "signedDownloadUrl",
+      "value": "",
+      "type": "string",
+      "description": "Relative /downloads/v1.<payload>.<sig> path saved by Mint signed download URL."
     },
     {
       "key": "downloadTries",

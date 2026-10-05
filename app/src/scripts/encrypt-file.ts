@@ -1,4 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises';
+import { requireEnv } from '../config.js';
 import { encryptBytes, makeSealClient, makeSuiClient } from '../lib/seal.js';
 
 const [, , plaintextPath, sealPolicyId] = process.argv;
@@ -7,7 +8,7 @@ if (!plaintextPath || !sealPolicyId) {
 }
 
 const suiClient = makeSuiClient();
-const seal = makeSealClient(suiClient);
+const seal = makeSealClient(suiClient, requireEnv('CONSOLE_API_KEY'));
 
 const plaintext = await readFile(plaintextPath);
 const ciphertext = await encryptBytes(seal, sealPolicyId, plaintext);

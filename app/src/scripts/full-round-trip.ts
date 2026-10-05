@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { timingSafeEqual } from 'node:crypto';
+import { setTimeout as sleep } from 'node:timers/promises';
 
-import { requireEnv } from '../config.js';
+import { CONSOLE_NETWORK, NETWORK, requireEnv } from '../config.js';
 import { ConsoleClient, ConsoleError } from '../lib/console.js';
 import {
   decryptBytes,
@@ -16,13 +17,16 @@ const SAMPLE_PATH = new URL('../../sample.txt', import.meta.url);
 const BUCKET_NAME = `round-trip-${Date.now()}`;
 const UPLOAD_NAME = 'sample.txt.enc';
 
-const consoleClient = new ConsoleClient({ apiKey: requireEnv('CONSOLE_API_KEY') });
+const apiKey = requireEnv('CONSOLE_API_KEY');
+const consoleClient = new ConsoleClient({ apiKey });
 const keypair = loadKeypair(requireEnv('CONSOLE_SERVICE_PRIVKEY'));
 const sui = makeSuiClient();
-const seal = makeSealClient(sui);
+const seal = makeSealClient(sui, apiKey);
+
+console.log(`network=${CONSOLE_NETWORK} api=${NETWORK.apiBase}`);
 
 function step(n: number, label: string): void {
-  console.log(`\n[${n}/10] ${label}`);
+  console.log(`\n[${n}/12] ${label}`);
 }
 
 step(1, 'List spaces');
@@ -36,13 +40,13 @@ let reserved;
 try {
   reserved = await consoleClient.reserveBucket(space.id, BUCKET_NAME);
 } catch (err) {
-  if (err instanceof ConsoleError && err.parsed?.code === 'PLAN_LIMIT_EXCEEDED') {
+  if (err instanceof ConsoleError && err.parsed?.code === 'plan_limit_exceeded') {
     console.error(
-      `\nBucket cap reached for space ${space.id}. This script leaves each ` +
-        `created bucket behind (only the file is deleted), so cleanup is on you. ` +
-        `Delete empty buckets in the space and retry:\n\n` +
+      `\nBucket cap reached for space ${space.id}. Runs that fail before the ` +
+        `final step leave their bucket behind. Delete empty buckets in the ` +
+        `space and retry:\n\n` +
         `  set -a; source .env; set +a\n` +
-        `  export BASE="https://api.testnet.console.walrus.xyz"\n` +
+        `  export BASE="${NETWORK.apiBase}"\n` +
         `  export AUTH="Authorization: Bearer $CONSOLE_API_KEY"\n` +
         `  curl -sS -H "$AUTH" "$BASE/api/v1/spaces/${space.id}/buckets" \\\n` +
         `    | jq -r '.buckets[].id' \\\n` +
@@ -61,7 +65,9 @@ console.log(`  signature.length=${signature.length}`);
 
 step(4, 'Finalize');
 const finalized = await consoleClient.finalizeBucket(reserved.bucket_id, signature);
-console.log(`  seal_policy_id=${finalized.seal_policy_id} state=${finalized.state}`);
+console.log(
+  `  seal_policy_id=${finalized.seal_policy_id} provisioning_state=${finalized.provisioning_state}`,
+);
 
 step(5, 'Encrypt sample.txt with Seal');
 const plaintext = await readFile(SAMPLE_PATH);
@@ -86,11 +92,22 @@ step(8, 'Download ciphertext');
 const downloaded = await consoleClient.downloadFile(reserved.bucket_id, upload.data.id);
 console.log(`  downloaded ${downloaded.byteLength}B`);
 
-step(9, 'Decrypt with Seal');
+step(9, 'Mint + redeem signed download URL');
+const signed = await consoleClient.mintDownloadUrl(reserved.bucket_id, upload.data.id);
+console.log(`  download_url=${signed.download_url.slice(0, 32)}… expires_at=${signed.expires_at}`);
+const redeemed = await consoleClient.redeemDownloadUrl(signed.download_url);
+const redeemedMatches =
+  redeemed.byteLength === downloaded.byteLength && timingSafeEqual(redeemed, downloaded);
+console.log(`  redeemed ${redeemed.byteLength}B without auth`);
+if (!redeemedMatches) {
+  throw new Error('Signed-URL bytes differ from the authenticated download.');
+}
+
+step(10, 'Decrypt with Seal');
 const decrypted = await decryptBytes(seal, sui, keypair, finalized.seal_policy_id, downloaded);
 console.log(`  decrypted ${decrypted.byteLength}B`);
 
-step(10, 'Verify + delete');
+step(11, 'Verify + delete file');
 const matches =
   plaintext.byteLength === decrypted.byteLength && timingSafeEqual(plaintext, decrypted);
 console.log(`  ${matches ? 'MATCH' : 'MISMATCH'}`);
@@ -98,5 +115,23 @@ if (!matches) process.exitCode = 1;
 
 await consoleClient.deleteFile(reserved.bucket_id, upload.data.id);
 console.log(`  deleted file.id=${upload.data.id}`);
+
+// File delete is an async soft-delete, so the bucket can still report files
+// for a few seconds. Retry the 400 until the worker settles.
+step(12, 'Delete bucket');
+const BUCKET_DELETE_MAX_RETRIES = 10;
+for (let attempt = 1; ; attempt++) {
+  try {
+    await consoleClient.deleteBucket(reserved.bucket_id);
+    console.log(`  deleted bucket_id=${reserved.bucket_id}`);
+    break;
+  } catch (err) {
+    const retryable =
+      err instanceof ConsoleError && err.status === 400 && attempt < BUCKET_DELETE_MAX_RETRIES;
+    if (!retryable) throw err;
+    console.log(`  attempt ${attempt}: bucket not empty yet (HTTP 400) — retrying`);
+    await sleep(3_000);
+  }
+}
 
 console.log('\nRound-trip OK.');

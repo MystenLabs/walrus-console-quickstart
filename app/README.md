@@ -6,7 +6,7 @@ Same domain code drives **four** runnable surfaces:
 1. **curl walkthrough** — drive the REST manually, dropping into helper scripts
    for the crypto that `curl` can't do.
 2. **Helper CLIs** — `sign-reserve`, `encrypt-file`, `decrypt-file`.
-3. **Automated round-trip** — single script that drives all 10 steps end-to-end.
+3. **Automated round-trip** — single script that drives all 12 steps end-to-end.
 4. **Hono backend** — tiny local HTTP server exposing the flow as proper
    REST routes (the integration model a frontend would call).
 
@@ -15,19 +15,20 @@ Same domain code drives **four** runnable surfaces:
 ```
 app/
   src/
-    config.ts             # API base, package ids, Seal config, requireEnv()
+    config.ts             # per-network table (API host, package ids, Seal committee), requireEnv()
     lib/
       seal.ts             # Sui signing, Seal encrypt/decrypt, SessionKey
-      console.ts           # Console REST client (used by scripts and server)
+      console.ts          # Console REST client (used by scripts and server)
     scripts/
       sign-reserve.ts     # CLI: <base64 bytes> → signature
       encrypt-file.ts     # CLI: <plaintextPath> <sealPolicyId> → <…>.enc
       decrypt-file.ts     # CLI: <ciphertextPath> <sealPolicyId> [original] → <…>.dec + MATCH/MISMATCH
-      full-round-trip.ts  # end-to-end: all 10 steps
+      full-round-trip.ts  # end-to-end: all 12 steps
     server/
       index.ts            # Hono backend
   sample.txt              # round-trip plaintext
   package.json            # one pnpm project; one install
+  pnpm-workspace.yaml     # pnpm config only (allowBuilds), no workspace packages
   tsconfig.json
   .env.example
 ```
@@ -52,6 +53,29 @@ pnpm run typecheck
 
 The pnpm scripts auto-load `.env` via `tsx --env-file=.env …`.
 
+### Networks
+
+`src/config.ts` holds one row per Sui network: API host, fullnode, package ids,
+`BucketRegistry` id, and the Seal committee id. `CONSOLE_NETWORK` in `.env`
+selects the row:
+
+| `CONSOLE_NETWORK` | Use | API host |
+| --- | --- | --- |
+| `mainnet` (default) | production | `https://api.console.walrus.xyz` |
+| `testnet` | staging, QA, testing | `https://api.testnet.console.walrus.xyz` |
+
+API keys are per network. A key minted at `console.walrus.xyz` answers `401`
+on the testnet host, and the reverse. A shell variable wins over `.env`, so
+one-off runs can switch without an edit:
+
+```bash
+CONSOLE_NETWORK=testnet pnpm run full-round-trip
+```
+
+Seal key fetches go through Console's `fetch_key` proxy on the selected API
+host, authenticated with the same `hbr_…` key. That is why `encrypt-file` and
+`decrypt-file` also read `CONSOLE_API_KEY`.
+
 ---
 
 ## 1. Curl walkthrough
@@ -61,9 +85,12 @@ scripts run the helper CLIs. Source your `.env` first:
 
 ```bash
 set -a; source .env; set +a
-export BASE="https://api.testnet.console.walrus.xyz"
+export BASE="https://api.console.walrus.xyz"   # testnet: https://api.testnet.console.walrus.xyz
 export AUTH="Authorization: Bearer $CONSOLE_API_KEY"
 ```
+
+`BASE` must match `CONSOLE_NETWORK` in `.env`, because the helper CLIs read
+their network from there.
 
 ### 1. List spaces
 
@@ -147,11 +174,29 @@ done
 ### 7. Download
 
 ```bash
-curl -sS -H "$AUTH" -o downloaded.enc \
+curl -sSL -H "$AUTH" -o downloaded.enc \
   "$BASE/api/v1/buckets/$BUCKET_ID/files/$FILE_ID/download"
 ```
 
-### 8 + 9. Decrypt + verify (helper #3), then delete
+### 8. Mint + redeem a signed download URL
+
+The mint returns a relative `/downloads/v1.…` path. Redeeming it needs **no
+auth header** — the signed token in the path is the credential. The requested
+`ttl` (seconds) is clamped to the space plan's cap (free: 15 minutes).
+
+```bash
+SIGNED_URL=$(curl -sS -X POST -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{}' "$BASE/api/v1/buckets/$BUCKET_ID/files/$FILE_ID/download-url" \
+  | jq -r '.data.download_url')
+
+curl -sS -o redeemed.enc "$BASE$SIGNED_URL"
+cmp downloaded.enc redeemed.enc && echo "signed URL bytes match"
+```
+
+### 9 + 10. Decrypt + verify (helper #3), then delete file + bucket
+
+The file delete is an async soft-delete, so the bucket delete can 400 for a
+few seconds — re-run it until it answers 204.
 
 ```bash
 pnpm run decrypt-file downloaded.enc "$SEAL_POLICY_ID" sample.txt
@@ -160,6 +205,10 @@ pnpm run decrypt-file downloaded.enc "$SEAL_POLICY_ID" sample.txt
 curl -sS -X DELETE -H "$AUTH" -o /dev/null -w '%{http_code}\n' \
   "$BASE/api/v1/buckets/$BUCKET_ID/files/$FILE_ID"
 # → 204
+
+curl -sS -X DELETE -H "$AUTH" -o /dev/null -w '%{http_code}\n' \
+  "$BASE/api/v1/buckets/$BUCKET_ID?confirm=true"
+# → 204 (400 while the file delete settles — retry)
 ```
 
 ### Cleanup: stranded or accumulated buckets
@@ -168,7 +217,7 @@ Stranded `pending_policy` (reserve succeeded, finalize never landed):
 
 ```bash
 curl -sS -H "$AUTH" "$BASE/api/v1/spaces/$SPACE_ID/buckets" \
-  | jq -r '.buckets[] | select(.state=="pending_policy") | .id' \
+  | jq -r '.buckets[] | select(.provisioning_state=="pending_policy") | .id' \
   | xargs -I{} curl -sS -X DELETE -H "$AUTH" -o /dev/null -w '%{http_code} {}\n' \
       "$BASE/api/v1/buckets/{}?confirm=true"
 ```
@@ -192,8 +241,8 @@ curl -sS -H "$AUTH" "$BASE/api/v1/spaces/$SPACE_ID/buckets" \
 pnpm run full-round-trip
 ```
 
-Logs each of the 10 steps and exits with `Round-trip OK.` after the **MATCH**
-verification + file delete. Smoke test after any local edit.
+Logs each of the 12 steps and exits with `Round-trip OK.` after the **MATCH**
+verification, file delete, and bucket delete. Smoke test after any local edit.
 
 ---
 
@@ -254,7 +303,7 @@ Deliberate "keep it simple" trade-offs in this reference, not recommendations
 for production code:
 
 - **Synchronous upload.** `POST /api/buckets/:id/files` holds the HTTP request
-  open until Console reports `completed` (≤~1m on testnet today). Frontend UX
+  open until Console reports `completed` (≤~1m today). Frontend UX
   is a single request, but the connection has to survive that long.
   _Improve:_ return `202 {file_id}` immediately and expose
   `GET /api/buckets/:id/files/:fileId/status` so the frontend polls.
@@ -273,13 +322,14 @@ for production code:
 - **`DELETE /api/buckets/:id` can still return 400 from Console.** Even with
   `?confirm=true`, Console 400s if the bucket isn't empty — delete its files
   first. Cleanest target is `pending_policy` (no files possible).
-- **`full-round-trip.ts` does not clean up its bucket.** Only the file is
-  deleted; the bucket stays. Repeated runs accumulate and eventually trip the
-  per-space bucket cap (`422 PLAN_LIMIT_EXCEEDED` on the next reserve). The
-  script catches that specific error and prints the cleanup snippet; run it
+- **`full-round-trip.ts` cleans up only on success.** The final step deletes
+  the bucket (retrying the 400 while the async file delete settles), but a run
+  that fails earlier leaves its bucket behind. Enough failed runs trip the
+  per-space bucket cap (`422 plan_limit_exceeded` on the next reserve); the
+  script catches that specific error and prints the cleanup snippet — run it
   and retry.
-  _Improve:_ delete the bucket too at the end (or `set -e` a cleanup trap),
-  or pre-clean stale buckets on startup.
+  _Improve:_ wrap the run in a cleanup trap so failed runs also delete their
+  bucket, or pre-clean stale buckets on startup.
 - **No auth on this server.** It binds to `127.0.0.1` and assumes the caller
   is the local frontend.
   _Improve:_ shared-secret header, mTLS, or session cookies before exposing

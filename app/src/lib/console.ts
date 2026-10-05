@@ -1,12 +1,12 @@
 import { setTimeout as sleep } from 'node:timers/promises';
-import { API_BASE } from '../config.js';
+import { NETWORK } from '../config.js';
 
 export type SpaceListItem = { id: string; name?: string };
 export type BucketSummary = {
   id: string;
   name: string;
   visibility: string;
-  state: string;
+  provisioning_state?: string;
   seal_policy_id: string | null;
 };
 export type FileSummary = {
@@ -19,14 +19,17 @@ export type ReserveResponse = {
   bucket_id: string;
   bytes: string;
   digest: string;
-  state: string;
+  provisioning_state: string;
+  owner_address: string;
+  admin_signer_address: string;
 };
 export type FinalizeResponse = {
   bucket_id: string;
   seal_policy_id: string;
-  state: string;
+  provisioning_state: string;
 };
 export type UploadResponse = { data: { id: string } };
+export type DownloadUrlData = { download_url: string; expires_at: string };
 export type FileState = 'queued' | 'active' | 'completed' | 'failed';
 export type StatusResponse = {
   data: { state: FileState; error?: { code: string; message: string } };
@@ -88,7 +91,7 @@ export class ConsoleClient {
   private readonly pollMaxAttempts: number;
 
   constructor(opts: ConsoleClientOptions) {
-    this.baseUrl = opts.baseUrl ?? API_BASE;
+    this.baseUrl = opts.baseUrl ?? NETWORK.apiBase;
     this.authHeader = { Authorization: `Bearer ${opts.apiKey}` };
     this.jsonHeaders = { ...this.authHeader, 'Content-Type': 'application/json' };
     this.uploadMaxRetries = opts.uploadMaxRetries ?? 20;
@@ -212,11 +215,43 @@ export class ConsoleClient {
     throw new Error(`File did not reach 'completed' within ${this.pollMaxAttempts} polls.`);
   }
 
+  // Console can answer 307 to a separate user-content host; fetch follows it.
   async downloadFile(bucketId: string, fileId: string): Promise<Uint8Array<ArrayBuffer>> {
     const res = await fetch(
       `${this.baseUrl}/api/v1/buckets/${bucketId}/files/${fileId}/download`,
       { headers: this.authHeader },
     );
+    if (!res.ok) {
+      const body = await readBody(res);
+      throw new ConsoleError(res.status, body, tryParseJson(body));
+    }
+    return new Uint8Array(await res.arrayBuffer());
+  }
+
+  // Mint a short-lived signed download URL. `ttlSeconds` is clamped to the
+  // space plan's cap (free 15m); omit it to mint at the plan default.
+  async mintDownloadUrl(
+    bucketId: string,
+    fileId: string,
+    ttlSeconds?: number,
+  ): Promise<DownloadUrlData> {
+    const res = await fetch(
+      `${this.baseUrl}/api/v1/buckets/${bucketId}/files/${fileId}/download-url`,
+      {
+        method: 'POST',
+        headers: this.jsonHeaders,
+        body: JSON.stringify(ttlSeconds === undefined ? {} : { ttl: ttlSeconds }),
+      },
+    );
+    const body = await expect<{ data: DownloadUrlData }>(res);
+    return body.data;
+  }
+
+  // Redeem is unauthenticated by design — the signed token in the path is the
+  // credential. `downloadUrlPath` is the relative `/downloads/v1.…` path from
+  // mintDownloadUrl.
+  async redeemDownloadUrl(downloadUrlPath: string): Promise<Uint8Array<ArrayBuffer>> {
+    const res = await fetch(`${this.baseUrl}${downloadUrlPath}`);
     if (!res.ok) {
       const body = await readBody(res);
       throw new ConsoleError(res.status, body, tryParseJson(body));

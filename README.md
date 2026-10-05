@@ -2,8 +2,8 @@
 
 Everything you need to start building on the **Console API**.
 
-> **Alpha · Testnet only.** Endpoint shapes may change before mainnet GA. Do not put
-> production data behind this.
+> Console runs on Sui **mainnet** (default, production) and Sui **testnet** (staging, for
+> QA and testing).
 
 ---
 
@@ -36,20 +36,21 @@ If you can call a REST endpoint, you can build on Console.
 | Path                             | What it is                                                                                      |
 | -------------------------------- | ----------------------------------------------------------------------------------------------- |
 | [`QUICKSTART.md`](QUICKSTART.md) | "Hello world" tour — sign up, create an encrypted bucket, upload + download a file. Start here. |
-| [`openapi.yaml`](openapi.yaml)   | Curated OpenAPI spec — the public, Bearer-only API surface (11 endpoints).                      |
+| [`openapi.yaml`](openapi.yaml)   | Curated OpenAPI spec — the public, Bearer-only API surface (18 operations on 13 paths).         |
 | [`postman/`](postman/)           | Ready-to-import Postman collection + environment for poking the API by hand.                    |
 | [`app/`](app/)                   | TypeScript reference integration: curl walkthrough, helper CLIs, automated round-trip, Hono backend. |
 | [`AGENTS.md`](AGENTS.md)         | Repo-level guidance for AI coding assistants (loaded by `CLAUDE.md`).                           |
 
 ## Quickstart
 
-Prerequisites: a way to sign in to the web app to mint an API key — Google (via zkLogin)
-is the quickest path; a Sui wallet also works — plus `curl`/Postman or Node.js. See
-[`QUICKSTART.md`](QUICKSTART.md) for exact versions.
+Prerequisites: a way to sign in to the web app to mint an API key — Google or Apple (via zkLogin)
+— plus `curl`/Postman or Node.js. See [`QUICKSTART.md`](QUICKSTART.md) for exact versions.
 
-1. Sign in at **[testnet.console.walrus.xyz](https://testnet.console.walrus.xyz/)** —
-   Google (via zkLogin) is the quickest path; a Sui wallet also works. Your account and a
-   Personal Space are provisioned automatically.
+1. Sign in at **[console.walrus.xyz](https://console.walrus.xyz/)** —
+   Google or Apple (via zkLogin). Your account and a Personal Space
+   are provisioned automatically. For the staging environment, sign in at
+   [testnet.console.walrus.xyz](https://testnet.console.walrus.xyz/) instead. API keys are
+   per network.
 2. **Settings → API Keys → Create API Key**, pick **Read & Write**
    (`read_write`), and copy the `hbr_…` key — it is shown **once**.
 3. Follow [`QUICKSTART.md`](QUICKSTART.md) to create a Seal-encrypted bucket and round-trip
@@ -57,21 +58,25 @@ is the quickest path; a Sui wallet also works — plus `curl`/Postman or Node.js
 
 ### Poke the API with Postman
 
-Import both files from [`postman/`](postman/) into Postman Desktop:
+Import the collection and one environment from [`postman/`](postman/) into Postman Desktop:
 
 - `postman/console.postman_collection.json`
-- `postman/console.postman_environment.json`
+- `postman/console.postman_environment.json` (mainnet)
+- `postman/console.testnet.postman_environment.json` (testnet)
 
-Paste your `hbr_…` key into the `bearerToken` environment variable. `baseUrl` defaults to
-`https://api.testnet.console.walrus.xyz`.
+Paste your `hbr_…` key into the `bearerToken` environment variable. `baseUrl` is
+`https://api.console.walrus.xyz` in the mainnet environment and
+`https://api.testnet.console.walrus.xyz` in the testnet one.
 
 ## Hosted docs
 
 The same docs are served live from the API:
 
-- OpenAPI viewer (Scalar): <https://api.testnet.console.walrus.xyz/docs/openapi>
-- OpenAPI spec (raw): <https://api.testnet.console.walrus.xyz/openapi.yaml>
-- Docs index: <https://api.testnet.console.walrus.xyz/docs>
+- OpenAPI viewer (Scalar): <https://api.console.walrus.xyz/docs/openapi>
+- OpenAPI spec (raw): <https://api.console.walrus.xyz/openapi.yaml>
+- Docs index: <https://api.console.walrus.xyz/docs>
+
+The testnet API serves the same pages at `https://api.testnet.console.walrus.xyz`.
 
 ## Questions / issues
 
