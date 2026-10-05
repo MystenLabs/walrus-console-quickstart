@@ -691,7 +691,7 @@ paths:
       summary: Finalize private bucket
       description: >-
         Submit the on-chain signature to finalize a pending private bucket. Transitions the bucket
-        from 'pending' to 'active'.
+        from `pending_policy` to `active`.
       operationId: finalizeBucket
       security:
         - bearerAuth: []
@@ -947,7 +947,7 @@ paths:
     post:
       tags:
         - SEAL
-      summary: Proxy Seal aggregator fetch_key on mainnet
+      summary: Proxy Seal aggregator fetch_key
       description: >-
         Backend proxy for `POST ${aggregatorUrl}/v1/fetch_key`.
 

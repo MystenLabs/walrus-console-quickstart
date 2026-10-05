@@ -1,6 +1,6 @@
 // Per-network configuration. Console runs on Sui mainnet (production) and Sui
 // testnet (staging, QA). Select one with `CONSOLE_NETWORK` in `.env`. The
-// default is mainnet, which is where beta users are.
+// default is mainnet.
 //
 // Object ids come from the Console contract deployment records
 // (`contract/DEPLOYMENTS.md` in the Console repo). Seal committee ids come

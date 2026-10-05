@@ -18,8 +18,8 @@
   },
   "item": [
     {
-      "name": "alpha (bearer)",
-      "description": "Endpoints an API-key consumer (alpha pod) actually hits. Auth is `Authorization: Bearer {{bearerToken}}` everywhere.",
+      "name": "bearer",
+      "description": "Endpoints that an API-key consumer calls. Auth is `Authorization: Bearer {{bearerToken}}` everywhere.",
       "item": [
         {
           "name": "spaces (read)",
@@ -571,7 +571,7 @@
         },
         {
           "name": "buckets",
-          "description": "Bucket lifecycle for hackathon developers. Public buckets are created synchronously; private (Seal-encrypted) buckets need a reserve → (optional Enoki sponsor/execute) → finalize handshake. Delete + rename ops live at this folder's top level since they're scope-agnostic.",
+          "description": "Bucket lifecycle. All buckets are private (Seal-encrypted) and need a reserve → sign → finalize handshake. Delete and rename live at the top level of this folder.",
           "item": [
             {
               "name": "List buckets in a space",
@@ -784,7 +784,7 @@
             },
             {
               "name": "Create bucket flow",
-              "description": "Reserve → sign → finalize handshake for private (Seal-encrypted) buckets. (1) Reserve to get the Enoki-sponsored tx bytes; the Reserve post-response script signs them locally (inlined tweetnacl + blakejs) and stashes the signature. (2) Finalize submits the signature so Console can broadcast the sponsored tx and activate the bucket. Public bucket creation is disabled at the API boundary in alpha.",
+              "description": "Reserve → sign → finalize handshake for private (Seal-encrypted) buckets. (1) Reserve to get the Enoki-sponsored tx bytes; the Reserve post-response script signs them locally (inlined tweetnacl + blakejs) and stashes the signature. (2) Finalize submits the signature so Console can broadcast the sponsored tx and activate the bucket. Public bucket creation is disabled at the API boundary.",
               "item": [
                 {
                   "name": "1. Reserve",
@@ -2569,7 +2569,7 @@
                         }
                       ]
                     },
-                    "description": "Finalize the private bucket by submitting your signature over the reserved tx bytes from 1. Reserve (same Reserve → Sign → Finalize flow as `api/scripts/e2e-private-bucket.ts`). Signing now happens in 1. Reserve's post-response script, which stores the Sui signature envelope in `reservedSignature`; this request just submits it. Console executes the sponsored tx server-side and returns `{ bucket_id, seal_policy_id, provisioning_state: \"active\" }`."
+                    "description": "Finalize the private bucket by submitting your signature over the reserved tx bytes from 1. Reserve (same Reserve → Sign → Finalize flow as `app/src/scripts/full-round-trip.ts`). Signing happens in 1. Reserve's post-response script, which stores the Sui signature envelope in `reservedSignature`; this request just submits it. Console executes the sponsored tx server-side and returns `{ bucket_id, seal_policy_id, provisioning_state: \"active\" }`."
                   },
                   "response": [],
                   "event": [
@@ -2675,7 +2675,7 @@
                     }
                   ]
                 },
-                "description": "Delete a bucket (`DELETE /buckets/:id?confirm=true`). Requires `confirm=true`. Cascades: enqueues removal of the bucket's files and blobs. Returns 204."
+                "description": "Delete a bucket (`DELETE /buckets/:id?confirm=true`). Requires `confirm=true`. Returns 204. Returns 400 if the bucket is not empty (files still present or storage in use). Delete the files first. File delete is asynchronous, so retry the 400 for a few seconds."
               },
               "response": [],
               "event": [
@@ -2684,8 +2684,8 @@
                   "script": {
                     "type": "text/javascript",
                     "exec": [
-                      "// Teardown — delete the bucket 'Create bucket in a space' made, so Newman",
-                      "// leaves no e2e-postman-* buckets behind (they'd eat the 5-bucket cap).",
+                      "// Teardown — delete the bucket that '1. Reserve' made, so Newman",
+                      "// leaves no e2e-private-* buckets behind (they count toward the per-space bucket cap).",
                       "pm.test('bucket teardown delete succeeded (<300)', () => pm.expect(pm.response.code).to.be.below(300));"
                     ]
                   }
@@ -2805,7 +2805,7 @@
                       "key": "name",
                       "type": "text",
                       "value": "upload-sample.txt",
-                      "description": "Display name for the file. Required."
+                      "description": "Display name for the file. Optional."
                     },
                     {
                       "key": "metadata",
@@ -2836,7 +2836,7 @@
                     }
                   ]
                 },
-                "description": "Upload a file to a bucket as `multipart/form-data`. **POST**. Accepts both `bearerAuth` and `cookieAuth`. Returns the upload job; poll `GET /api/v1/buckets/{id}/files/{fileId}/status` until ready."
+                "description": "Upload a file to a bucket as `multipart/form-data`. **POST**. Returns the upload job. Poll `GET /api/v1/buckets/{id}/files/{fileId}/status` until `state` is `completed`. Right after Finalize, this can return `403 mirror_missing_grant` while the ACL indexer catches up. Send it again every ~3s (up to 20 attempts). For private buckets, upload Seal ciphertext (see `app/src/lib/seal.ts`)."
               },
               "response": [],
               "event": [
@@ -3236,7 +3236,7 @@
                     }
                   ]
                 },
-                "description": "Stream the raw file content. Returns the file with appropriate Content-Type and Content-Disposition headers. Private/authenticated content is never cached by shared proxies. On deployments that serve user content from its own hostname this answers 307 to that host instead of bytes — Postman follows redirects by default; curl needs -L. The redirect target is single-use and short-lived. Mint a durable link with POST .../download-url."
+                "description": "Stream the raw file content. Always served as `application/octet-stream` with `Content-Disposition: attachment`. Private/authenticated content is never cached by shared proxies. On deployments that serve user content from its own hostname this answers 307 to that host instead of bytes — Postman follows redirects by default; curl needs -L. The redirect target is single-use and short-lived. Mint a durable link with POST .../download-url."
               },
               "response": [
                 {
