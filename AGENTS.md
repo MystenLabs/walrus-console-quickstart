@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Repo: reference code for the Console REST API (alpha). Runs on Sui mainnet
+Repo: reference code for the Console REST API. Runs on Sui mainnet
 (default, production) and Sui testnet (staging, QA).
 
 ## Layout

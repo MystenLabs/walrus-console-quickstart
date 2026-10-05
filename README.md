@@ -2,8 +2,8 @@
 
 Everything you need to start building on the **Console API**.
 
-> **Alpha.** Console runs on Sui **mainnet** (default) and Sui **testnet** (staging, for
-> QA and testing). Endpoint shapes can change before GA.
+> Console runs on Sui **mainnet** (default, production) and Sui **testnet** (staging, for
+> QA and testing).
 
 ---
 
@@ -36,19 +36,19 @@ If you can call a REST endpoint, you can build on Console.
 | Path                             | What it is                                                                                      |
 | -------------------------------- | ----------------------------------------------------------------------------------------------- |
 | [`QUICKSTART.md`](QUICKSTART.md) | "Hello world" tour — sign up, create an encrypted bucket, upload + download a file. Start here. |
-| [`openapi.yaml`](openapi.yaml)   | Curated OpenAPI spec — the public, Bearer-only API surface (13 endpoints).                      |
+| [`openapi.yaml`](openapi.yaml)   | Curated OpenAPI spec — the public, Bearer-only API surface (18 operations on 13 paths).         |
 | [`postman/`](postman/)           | Ready-to-import Postman collection + environment for poking the API by hand.                    |
 | [`app/`](app/)                   | TypeScript reference integration: curl walkthrough, helper CLIs, automated round-trip, Hono backend. |
 | [`AGENTS.md`](AGENTS.md)         | Repo-level guidance for AI coding assistants (loaded by `CLAUDE.md`).                           |
 
 ## Quickstart
 
-Prerequisites: a way to sign in to the web app to mint an API key — Google or Apple(via zkLogin)
+Prerequisites: a way to sign in to the web app to mint an API key — Google or Apple (via zkLogin)
 — plus `curl`/Postman or Node.js. See [`QUICKSTART.md`](QUICKSTART.md) for exact versions.
 
 1. Sign in at **[console.walrus.xyz](https://console.walrus.xyz/)** —
    Google or Apple (via zkLogin). Your account and a Personal Space
-    are provisioned automatically. For the staging environment, sign in at
+   are provisioned automatically. For the staging environment, sign in at
    [testnet.console.walrus.xyz](https://testnet.console.walrus.xyz/) instead. API keys are
    per network.
 2. **Settings → API Keys → Create API Key**, pick **Read & Write**

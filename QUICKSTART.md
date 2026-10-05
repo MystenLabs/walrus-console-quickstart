@@ -1,11 +1,10 @@
 # Console API Quickstart
 
-> **Alpha.** Console runs on Sui mainnet and Sui testnet. Mainnet is the
-> default. Testnet is the staging environment for QA and testing. Endpoint
-> shapes can change before GA.
+> Console runs on Sui mainnet and Sui testnet. Mainnet is the default and the
+> production environment. Testnet is the staging environment for QA and testing.
 
 A "hello world" tour of the Console API: sign up, create a Seal-encrypted
-bucket, then upload + download a file. In alpha, all bucket creation goes
+bucket, upload + download a file, then clean up. All bucket creation goes
 through the private (Seal-encrypted) flow — public bucket creation is
 disabled at the API boundary.
 
@@ -43,7 +42,7 @@ one with `CONSOLE_NETWORK` in `.env`.
 
 ## 1. Hello world — sign up via zkLogin
 
-1. Visit [console.walrus.xyz](https://console.walrus.xyz/) and sign in with Google or Apple(via zkLogin),
+1. Visit [console.walrus.xyz](https://console.walrus.xyz/) and sign in with Google or Apple (via zkLogin).
    Your account and a **Personal Space** are provisioned automatically.
    For the staging environment, use [testnet.console.walrus.xyz](https://testnet.console.walrus.xyz/)
    instead. The key you mint there works only against the testnet API host.
@@ -79,7 +78,7 @@ Every request below carries `Authorization: Bearer hbr_…`.
 
 ```
 service key setup → get space → reserve → sign → finalize →
-encrypt → upload → poll → download → decrypt
+encrypt → upload → poll → download → decrypt → delete
 ```
 
 Buckets are Seal-encrypted client-side — Console stores ciphertext only
@@ -119,8 +118,8 @@ GET /api/v1/spaces
 ```
 
 The response's `data[]` array contains your spaces; copy the `id` of the
-Personal Space created during sign-up. (Postman: `alpha (bearer) / spaces
-(read) / List spaces`.)
+Personal Space created during sign-up. (Postman: `bearer / spaces (read) /
+List spaces`.)
 
 ### 3. Reserve the bucket
 
@@ -138,7 +137,9 @@ Response (`201`):
   "bucket_id": "…",
   "bytes": "<base64 Enoki-sponsored Sui tx>",
   "digest": "…",
-  "provisioning_state": "pending_policy"
+  "provisioning_state": "pending_policy",
+  "owner_address": "0x…",
+  "admin_signer_address": "0x…"
 }
 ```
 
@@ -150,7 +151,10 @@ signature, so your service key just needs to add its own signature.
 `digest` is the Enoki sponsor digest; Console uses it server-side at
 finalize to look up the sponsored tx. The bucket row stays in
 `pending_policy` until the Finalize call below succeeds — until then no
-files can be uploaded to it.
+files can be uploaded to it. `owner_address` is the bucket owner that
+Console bound the reserve to. `admin_signer_address` is the space's
+active Key-Admin signer in the sponsored transaction, or `null` if the
+space has none.
 
 > **Sponsor signatures expire fast.** Treat **reserve → sign → finalize**
 > as a single tight sequence. If you stall between reserve and finalize,
@@ -280,12 +284,15 @@ Content-Type: multipart/form-data
 file=@<encryptedObject>
 ```
 
-Standard multipart upload, but the on-chain grant your key gets from
-Finalize — `BucketEditor` for a `readwrite` key, `BucketViewer` for a `read`
-key — needs a few seconds to land in Console's ACL indexer. Until then
-this endpoint returns `403` with `code: "mirror_missing_grant"`. Retry
-every ~3 seconds; ≤20 attempts is plenty in practice. Once the grant
-mirrors, the response is `202` with `data.id`.
+Standard multipart upload. The optional `name` field sets the file's
+display name. The on-chain grant your key gets from Finalize needs a few
+seconds to land in Console's ACL indexer. Until then this endpoint returns
+`403` with `code: "mirror_missing_grant"`. Retry every ~3 seconds. Up to
+20 attempts is enough in practice. Once the grant mirrors, the response
+is `202` with `data.id`.
+
+The first `GET /api/v1/buckets/{bucketId}` after Finalize can return the
+same `403 mirror_missing_grant`. Retry it the same way.
 
 ### 8. Poll status
 
@@ -388,6 +395,22 @@ stops working at `expires_at`. The body is optional; the requested `ttl`
 rate-limited per space and per API key. The redeemed bytes are still Seal
 ciphertext — decryption stays client-side, exactly as in step 9.
 
+### 11. Clean up — delete the file, then the bucket
+
+```http
+DELETE /api/v1/buckets/{bucketId}/files/{fileId}
+DELETE /api/v1/buckets/{bucketId}?confirm=true
+```
+
+Both return `204`. The file delete is an asynchronous soft-delete, so the
+bucket can still report files for a few seconds. Until then, the bucket
+delete returns `400`. Retry it every ~3 seconds. The `confirm=true` query
+param is required.
+
+Buckets count toward a per-space cap. When you reach it, reserve returns
+`422` with `code: "plan_limit_exceeded"`. Delete the buckets you do not
+need, then reserve again.
+
 ---
 
 ## 3. Filing issues
@@ -400,8 +423,8 @@ Please include:
 
 - The endpoint and HTTP method
 - The HTTP status and the `code` field from the error response (if any)
-- Postman collection version (visible in the collection's **Info** tab)
+- The network (mainnet or testnet)
 
 For the full machine-readable surface, see
 [`openapi.yaml`](openapi.yaml) (curated, Bearer-only,
-13 endpoints).
+18 operations on 13 paths).

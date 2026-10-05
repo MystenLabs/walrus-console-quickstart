@@ -18,7 +18,7 @@ app/
     config.ts             # per-network table (API host, package ids, Seal committee), requireEnv()
     lib/
       seal.ts             # Sui signing, Seal encrypt/decrypt, SessionKey
-      console.ts           # Console REST client (used by scripts and server)
+      console.ts          # Console REST client (used by scripts and server)
     scripts/
       sign-reserve.ts     # CLI: <base64 bytes> → signature
       encrypt-file.ts     # CLI: <plaintextPath> <sealPolicyId> → <…>.enc
@@ -28,6 +28,7 @@ app/
       index.ts            # Hono backend
   sample.txt              # round-trip plaintext
   package.json            # one pnpm project; one install
+  pnpm-workspace.yaml     # pnpm config only (allowBuilds), no workspace packages
   tsconfig.json
   .env.example
 ```
@@ -60,7 +61,7 @@ selects the row:
 
 | `CONSOLE_NETWORK` | Use | API host |
 | --- | --- | --- |
-| `mainnet` (default) | production, beta users | `https://api.console.walrus.xyz` |
+| `mainnet` (default) | production | `https://api.console.walrus.xyz` |
 | `testnet` | staging, QA, testing | `https://api.testnet.console.walrus.xyz` |
 
 API keys are per network. A key minted at `console.walrus.xyz` answers `401`
