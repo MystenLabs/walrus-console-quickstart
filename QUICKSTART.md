@@ -432,7 +432,8 @@ A key that stops authenticating gets a `401` whose `code` says why:
 | `api_key_replaced` | The key was rotated and a new key replaces it. | Install the new `hbr_…` key and service private key. |
 
 Rotating revokes the old key before the new one is shown, so there is no window
-where both work.
+where both work. Anything using the old key is down from the moment it is revoked
+until the new key is installed.
 
 ---
 
