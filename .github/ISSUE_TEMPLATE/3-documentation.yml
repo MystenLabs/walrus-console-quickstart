@@ -1,0 +1,20 @@
+name: Documentation
+description: Report an issue or a possible improvement in the documentation.
+title: "[Docs]: "
+labels: ["console documentation", "P2"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Please review the [Console FAQ](https://docs.wal.app/docs/console/faq) and the [Console docs](https://docs.wal.app/docs/console/overview) first, then describe clearly and concisely what could be improved. Paste, drop, or click to add files.
+    validations:
+      required: true
+  - type: checkboxes
+    id: code-of-conduct
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our [Code of Conduct](https://github.com/MystenLabs/walrus/blob/main/CODE_OF_CONDUCT.md).
+      options:
+        - label: I agree to follow this project's Code of Conduct.
+          required: true
