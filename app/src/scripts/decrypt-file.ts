@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { timingSafeEqual } from 'node:crypto';
-import { requireEnv, requireEnvAny } from '../config.js';
+import { requireEnv, requireServicePrivateKey } from '../config.js';
 import {
   decryptBytes,
   loadKeypair,
@@ -17,9 +17,7 @@ if (!ciphertextPath || !sealPolicyId) {
 
 const suiClient = makeSuiClient();
 const seal = makeSealClient(suiClient, requireEnv('CONSOLE_API_KEY'));
-const keypair = loadKeypair(
-  requireEnvAny(['CONSOLE_SERVICE_PRIVATE_KEY', 'CONSOLE_SERVICE_PRIVKEY']),
-);
+const keypair = loadKeypair(requireServicePrivateKey());
 
 const ciphertext = await readFile(ciphertextPath);
 const plaintext = await decryptBytes(seal, suiClient, keypair, sealPolicyId, ciphertext);
