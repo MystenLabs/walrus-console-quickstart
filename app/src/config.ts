@@ -104,3 +104,15 @@ export function requireEnv(name: string): string {
   }
   return v;
 }
+
+/** Reads the first env var that is set. Lets a renamed variable keep its old name working. */
+export function requireEnvAny(names: readonly string[]): string {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value) return value;
+  }
+  throw new Error(
+    `Missing required env var: ${names[0]} (also accepted: ${names.slice(1).join(', ')}). ` +
+      `Copy .env.example to .env and fill it in, or run via the pnpm scripts (which load .env automatically).`,
+  );
+}

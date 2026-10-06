@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { timingSafeEqual } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { CONSOLE_NETWORK, NETWORK, requireEnv } from '../config.js';
+import { CONSOLE_NETWORK, NETWORK, requireEnv, requireEnvAny } from '../config.js';
 import { ConsoleClient, ConsoleError } from '../lib/console.js';
 import {
   decryptBytes,
@@ -19,7 +19,9 @@ const UPLOAD_NAME = 'sample.txt.enc';
 
 const apiKey = requireEnv('CONSOLE_API_KEY');
 const consoleClient = new ConsoleClient({ apiKey });
-const keypair = loadKeypair(requireEnv('CONSOLE_SERVICE_PRIVKEY'));
+const keypair = loadKeypair(
+  requireEnvAny(['CONSOLE_SERVICE_PRIVATE_KEY', 'CONSOLE_SERVICE_PRIVKEY']),
+);
 const sui = makeSuiClient();
 const seal = makeSealClient(sui, apiKey);
 

@@ -47,7 +47,7 @@ app/
 ```bash
 cd app
 pnpm install
-cp .env.example .env   # fill CONSOLE_API_KEY + CONSOLE_SERVICE_PRIVKEY
+cp .env.example .env   # fill CONSOLE_API_KEY + CONSOLE_SERVICE_PRIVATE_KEY
 pnpm run typecheck
 ```
 

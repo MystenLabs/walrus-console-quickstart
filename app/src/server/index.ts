@@ -5,7 +5,7 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
-import { CONSOLE_NETWORK, NETWORK, requireEnv } from '../config.js';
+import { CONSOLE_NETWORK, NETWORK, requireEnv, requireEnvAny } from '../config.js';
 import { ConsoleClient, ConsoleError } from '../lib/console.js';
 import {
   decryptBytes,
@@ -18,7 +18,9 @@ import {
 
 const apiKey = requireEnv('CONSOLE_API_KEY');
 const consoleClient = new ConsoleClient({ apiKey });
-const keypair = loadKeypair(requireEnv('CONSOLE_SERVICE_PRIVKEY'));
+const keypair = loadKeypair(
+  requireEnvAny(['CONSOLE_SERVICE_PRIVATE_KEY', 'CONSOLE_SERVICE_PRIVKEY']),
+);
 const sui = makeSuiClient();
 const seal = makeSealClient(sui, apiKey);
 
