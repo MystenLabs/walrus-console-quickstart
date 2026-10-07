@@ -20,6 +20,13 @@ body:
     validations:
       required: true
   - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: "This issue and its attachments contain no API keys (`hbr_…`), service private keys (`suiprivkey1…`), credential bundles, or other secrets."
+          required: true
+  - type: checkboxes
     id: code-of-conduct
     attributes:
       label: Code of Conduct
