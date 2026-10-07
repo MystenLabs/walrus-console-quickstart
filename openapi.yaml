@@ -8,8 +8,6 @@ info:
 servers:
   - url: https://api.console.walrus.xyz
     description: Mainnet
-  - url: https://api.testnet.console.walrus.xyz
-    description: Testnet (staging)
 tags:
   - name: Spaces
     description: Space management

@@ -1,7 +1,6 @@
 # AGENTS.md
 
-Repo: reference code for the Console REST API. Runs on Sui mainnet
-(default, production) and Sui testnet (staging, QA).
+Repo: reference code for the Console REST API. Runs on Sui mainnet.
 
 ## Layout
 
@@ -10,8 +9,8 @@ Repo: reference code for the Console REST API. Runs on Sui mainnet
 - `openapi.yaml`, `postman/` — curated API surface. `openapi.yaml` is authoritative
   for endpoint shapes, status codes, and required query/body params.
 - `app/` — single pnpm project covering all four runnable surfaces:
-  - `app/src/config.ts` — per-network table (`NETWORKS`), selected by
-    `CONSOLE_NETWORK` (`mainnet` default, `testnet`).
+  - `app/src/config.ts` — `NETWORK`: API host, fullnode, package ids,
+    `BucketRegistry` id and Seal committee id.
   - `app/src/lib/{seal,console}.ts` — shared Seal + Console REST helpers.
   - `app/src/scripts/` — three helper CLIs (`sign-reserve`, `encrypt-file`,
     `decrypt-file`) + `full-round-trip.ts`.
@@ -47,12 +46,11 @@ key that signs the reserve transaction and Seal decrypt sessions.
 - `seal_approve` move-call target uses `NETWORK.latestPackageId::bucket_policy::seal_approve`
   with args `(vector<u8> id, &BucketRegistry, &PermissionedGroup)` — the shared
   `NETWORK.bucketRegistryId` object is a required argument since the August 2026 contract.
-- Seal uses one committee `KeyServer` per network (`NETWORK.sealCommitteeObjectId`),
+- Seal uses one committee `KeyServer` (`NETWORK.sealCommitteeObjectId`),
   weight 1, threshold 1. Key fetches go through Console's proxy at
   `{apiBase}/api/v1/seal/aggregator` with `apiKeyName: 'Authorization'` and
   `apiKey: 'Bearer hbr_…'`. The SDK appends `/v1/fetch_key`. Do not call the
   Seal aggregator directly: its credential lives on Console's backend.
-- API keys are per network. A testnet key answers `401` on the mainnet host.
 - After Finalize the first upload (and the first `GET /buckets/{id}` metadata
   read) may return `403 mirror_missing_grant` while the ACL indexer catches up.
   Retry ~3s, ≤20 attempts.
@@ -69,9 +67,7 @@ key that signs the reserve transaction and Seal decrypt sessions.
 
 From `app/`: `pnpm install && pnpm run typecheck`. Round-trip:
 `pnpm run full-round-trip` must end with **MATCH**, file delete, bucket
-delete, and `Round-trip OK.`. Run it once per network the change touches
-(`CONSOLE_NETWORK=testnet pnpm run full-round-trip` for staging), with a key
-minted on that network. It also mints and redeems a signed download
+delete, and `Round-trip OK.`. It also mints and redeems a signed download
 URL and compares the bytes. Server smoke test: `pnpm start`, then
 POST/GET/DELETE through the routes table in `app/README.md`.
 

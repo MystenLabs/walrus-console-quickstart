@@ -24,7 +24,7 @@ body:
     id: steps
     attributes:
       label: Steps to reproduce
-      description: For an API call, include the endpoint and HTTP method, and the network (mainnet or testnet).
+      description: For an API call, include the endpoint and HTTP method.
       placeholder: |
         1.
         2.

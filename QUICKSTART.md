@@ -1,8 +1,5 @@
 # Console API Quickstart
 
-> Console runs on Sui mainnet and Sui testnet. Mainnet is the default and the
-> production environment. Testnet is the staging environment for QA and testing.
-
 A "hello world" tour of the Console API: sign up, create a Seal-encrypted
 bucket, upload + download a file, then clean up. All bucket creation goes
 through the private (Seal-encrypted) flow — public bucket creation is
@@ -14,29 +11,24 @@ disabled at the API boundary.
 > - OpenAPI viewer (Scalar): [`/docs/openapi`](https://api.console.walrus.xyz/docs/openapi)
 > - OpenAPI spec (raw): [`/openapi.yaml`](https://api.console.walrus.xyz/openapi.yaml) · [`/openapi.json`](https://api.console.walrus.xyz/openapi.json)
 > - Docs index: [`/docs`](https://api.console.walrus.xyz/docs)
->
-> The testnet API serves the same pages at `https://api.testnet.console.walrus.xyz`.
 
 ---
 
-## Networks
+## Network
 
-Console runs on two Sui networks. API keys, buckets, and on-chain objects are
-per network: a key minted on one network does not work on the other.
+Console runs on Sui mainnet. API keys, buckets and on-chain objects live there.
 
-| | Mainnet (default) | Testnet (staging, QA) |
-| --- | --- | --- |
-| Web app | <https://console.walrus.xyz> | <https://testnet.console.walrus.xyz> |
-| API host | `https://api.console.walrus.xyz` | `https://api.testnet.console.walrus.xyz` |
-| Sui fullnode | `https://fullnode.mainnet.sui.io:443` | `https://fullnode.testnet.sui.io:443` |
-| Bucket-policy package (original = latest) | `0xb8d5b1cade7917190c47b8abfc789f527389fc021a8963c22755bcc1b539786c` | `0xf9b261d4c0dbcf845d79f864e85581f9686fd6de9f4770ba1d77489d67f7833c` |
-| `BucketRegistry` (shared) | `0x871f3d0341f36101ff0b30cd01dbe363f8d89d7f004df80e8084752d2f496958` | `0x902841af0cd25c5f8dee4980fe2942687c9ca80db56d77ff67a4ba6d9d97b9cf` |
-| Seal committee `KeyServer` | `0x686098f1439237fff9f36b99c7329683c22979d2005c2465cb891acb012a7595` | `0xb012378c9f3799fb5b1a7083da74a4069e3c3f1c93de0b27212a5799ce1e1e98` |
+| | Mainnet |
+| --- | --- |
+| Web app | <https://console.walrus.xyz> |
+| API host | `https://api.console.walrus.xyz` |
+| Sui fullnode | `https://fullnode.mainnet.sui.io:443` |
+| Bucket-policy package (original = latest) | `0xb8d5b1cade7917190c47b8abfc789f527389fc021a8963c22755bcc1b539786c` |
+| `BucketRegistry` (shared) | `0x871f3d0341f36101ff0b30cd01dbe363f8d89d7f004df80e8084752d2f496958` |
+| Seal committee `KeyServer` | `0x686098f1439237fff9f36b99c7329683c22979d2005c2465cb891acb012a7595` |
 
-Use mainnet for real data. Use testnet to test an integration before you point
-it at mainnet. The code in this guide reads the row for one network. The
-[`app/`](app/) reference keeps both rows in `app/src/config.ts` and selects
-one with `CONSOLE_NETWORK` in `.env`.
+The code in this guide uses these values. The [`app/`](app/) reference keeps
+them in `app/src/config.ts`.
 
 ---
 
@@ -44,8 +36,6 @@ one with `CONSOLE_NETWORK` in `.env`.
 
 1. Visit [console.walrus.xyz](https://console.walrus.xyz/) and sign in with Google or Apple (via zkLogin).
    Your account and a **Personal Space** are provisioned automatically.
-   For the staging environment, use [testnet.console.walrus.xyz](https://testnet.console.walrus.xyz/)
-   instead. The key you mint there works only against the testnet API host.
 2. Open **Integrations → Create API Key** (top-right), name the key, choose
    **API key** (not **Management API key**, which only mints further keys and
    cannot upload, download or manage assets), pick a **Permissions** option,
@@ -67,12 +57,10 @@ one with `CONSOLE_NETWORK` in `.env`.
 4. (Optional) Import the curated Postman collection and one environment into
    Postman Desktop:
    - `postman/console.postman_collection.json`
-   - `postman/console.postman_environment.json` (mainnet)
-   - `postman/console.testnet.postman_environment.json` (testnet)
+   - `postman/console.postman_environment.json`
 
    Paste your `hbr_…` key into the `bearerToken` env variable. `baseUrl` is
-   `https://api.console.walrus.xyz` in the mainnet environment and
-   `https://api.testnet.console.walrus.xyz` in the testnet one.
+   already set to `https://api.console.walrus.xyz`.
 
 Every request below carries `Authorization: Bearer hbr_…`.
 
@@ -221,8 +209,7 @@ import { SealClient } from '@mysten/seal';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { bcs } from '@mysten/sui/bcs';
 
-// Values below are the mainnet row of the Networks table. Swap in the testnet
-// row for staging.
+// Values below are from the Network table at the top of this guide.
 //
 // `ORIGINAL` here means the *original-id* of the upgradeable package
 // (its original/canonical published id). Seal pins identity
@@ -232,9 +219,9 @@ import { bcs } from '@mysten/sui/bcs';
 const CONSOLE_API_BASE = 'https://api.console.walrus.xyz';
 const CONSOLE_ORIGINAL_PACKAGE_ID =
   '0xb8d5b1cade7917190c47b8abfc789f527389fc021a8963c22755bcc1b539786c';
-// Seal's decentralized committee for this network. One KeyServer object stands
+// Seal's decentralized committee. One KeyServer object stands
 // for the whole committee, so the client-side threshold is 1. The committee
-// enforces its own threshold internally (mainnet 5-of-8, testnet 3-of-5).
+// enforces its own threshold internally (5-of-8).
 const SEAL_COMMITTEE_OBJECT_ID =
   '0x686098f1439237fff9f36b99c7329683c22979d2005c2465cb891acb012a7595';
 
@@ -333,7 +320,7 @@ import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { fromHex } from '@mysten/sui/utils';
 
-// Mainnet row of the Networks table again. Swap in the testnet row for staging.
+// Values from the Network table again.
 // Latest Console bucket-policy package — host of the `seal_approve` move call.
 const CONSOLE_LATEST_PACKAGE_ID =
   '0xb8d5b1cade7917190c47b8abfc789f527389fc021a8963c22755bcc1b539786c';
