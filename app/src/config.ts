@@ -104,3 +104,23 @@ export function requireEnv(name: string): string {
   }
   return v;
 }
+
+/** Reads the first env var that is set. Lets a renamed variable keep its old name working. */
+export function requireEnvAny(names: readonly string[]): string {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value) return value;
+  }
+  const alsoAccepted = names.length > 1 ? ` (also accepted: ${names.slice(1).join(', ')})` : '';
+  throw new Error(
+    `Missing required env var: ${names[0]}${alsoAccepted}. ` +
+      `Copy .env.example to .env and fill it in, or run via the pnpm scripts (which load .env automatically).`,
+  );
+}
+
+const SERVICE_PRIVATE_KEY_ENV = ['CONSOLE_SERVICE_PRIVATE_KEY', 'CONSOLE_SERVICE_PRIVKEY'] as const;
+
+/** The service private key, under its current name or the pre-October-2026 one. */
+export function requireServicePrivateKey(): string {
+  return requireEnvAny(SERVICE_PRIVATE_KEY_ENV);
+}

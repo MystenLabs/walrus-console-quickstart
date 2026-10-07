@@ -140,8 +140,9 @@ export class ConsoleClient {
     return expect<FinalizeResponse>(res);
   }
 
-  // Console requires `?confirm=true` on bucket delete, and 400s if the bucket
-  // is not empty (files still present or storage in use).
+  // Console requires `?confirm=true` on bucket delete. A bucket that still holds
+  // files is refused with `400 bucket_not_empty` and a `file_count` unless the call
+  // also passes `deleteContents=true`; this helper never does, so delete files first.
   async deleteBucket(bucketId: string): Promise<void> {
     const res = await fetch(`${this.baseUrl}/api/v1/buckets/${bucketId}?confirm=true`, {
       method: 'DELETE',

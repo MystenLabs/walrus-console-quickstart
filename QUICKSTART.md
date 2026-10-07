@@ -186,7 +186,7 @@ import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { fromBase64 } from '@mysten/sui/utils';
 
-const { secretKey } = decodeSuiPrivateKey(process.env.CONSOLE_SERVICE_PRIVKEY);
+const { secretKey } = decodeSuiPrivateKey(process.env.CONSOLE_SERVICE_PRIVATE_KEY);
 const keypair = Ed25519Keypair.fromSecretKey(secretKey);
 const { signature } = await keypair.signTransaction(fromBase64(bytes));
 ```
@@ -341,7 +341,7 @@ const CONSOLE_LATEST_PACKAGE_ID =
 const CONSOLE_BUCKET_REGISTRY_ID =
   '0x871f3d0341f36101ff0b30cd01dbe363f8d89d7f004df80e8084752d2f496958';
 
-const { secretKey } = decodeSuiPrivateKey(process.env.CONSOLE_SERVICE_PRIVKEY);
+const { secretKey } = decodeSuiPrivateKey(process.env.CONSOLE_SERVICE_PRIVATE_KEY);
 const keypair = Ed25519Keypair.fromSecretKey(secretKey);
 
 // ciphertext = bytes from GET /download

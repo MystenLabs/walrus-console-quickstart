@@ -1,5 +1,5 @@
 import { fromBase64 } from '@mysten/sui/utils';
-import { requireEnv } from '../config.js';
+import { requireServicePrivateKey } from '../config.js';
 import { loadKeypair, signReserveBytes } from '../lib/seal.js';
 
 const [, , base64Bytes] = process.argv;
@@ -18,6 +18,6 @@ try {
   throw new Error(`sign-reserve: argument is not valid base64 (${(err as Error).message})`);
 }
 
-const keypair = loadKeypair(requireEnv('CONSOLE_SERVICE_PRIVKEY'));
+const keypair = loadKeypair(requireServicePrivateKey());
 const signature = await signReserveBytes(keypair, base64Bytes);
 console.log(signature);
