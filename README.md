@@ -2,8 +2,7 @@
 
 Everything you need to start building on the **Console API**.
 
-> Console runs on Sui **mainnet** (default, production) and Sui **testnet** (staging, for
-> QA and testing).
+> Console runs on Sui **mainnet**.
 
 ---
 
@@ -46,9 +45,7 @@ Prerequisites: a way to sign in to the web app to mint an API key — Google or 
 
 1. Sign in at **[console.walrus.xyz](https://console.walrus.xyz/)** —
    Google or Apple (via zkLogin). Your account and a Personal Space
-   are provisioned automatically. For the staging environment, sign in at
-   [testnet.console.walrus.xyz](https://testnet.console.walrus.xyz/) instead. API keys are
-   per network.
+   are provisioned automatically.
 2. **Integrations → Create API Key** (top-right). Choose **API key**: the other
    type, **Management API key**, only mints further keys and cannot upload,
    download or manage assets. Pick **Read & Write** (`read_write`) and copy both
@@ -62,12 +59,10 @@ Prerequisites: a way to sign in to the web app to mint an API key — Google or 
 Import the collection and one environment from [`postman/`](postman/) into Postman Desktop:
 
 - `postman/console.postman_collection.json`
-- `postman/console.postman_environment.json` (mainnet)
-- `postman/console.testnet.postman_environment.json` (testnet)
+- `postman/console.postman_environment.json`
 
 Paste your `hbr_…` key into the `bearerToken` environment variable. `baseUrl` is
-`https://api.console.walrus.xyz` in the mainnet environment and
-`https://api.testnet.console.walrus.xyz` in the testnet one.
+already set to `https://api.console.walrus.xyz`.
 
 ## Hosted docs
 
@@ -76,8 +71,6 @@ The same docs are served live from the API:
 - OpenAPI viewer (Scalar): <https://api.console.walrus.xyz/docs/openapi>
 - OpenAPI spec (raw): <https://api.console.walrus.xyz/openapi.yaml>
 - Docs index: <https://api.console.walrus.xyz/docs>
-
-The testnet API serves the same pages at `https://api.testnet.console.walrus.xyz`.
 
 ## Questions / issues
 

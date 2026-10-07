@@ -15,7 +15,7 @@ Same domain code drives **four** runnable surfaces:
 ```
 app/
   src/
-    config.ts             # per-network table (API host, package ids, Seal committee), requireEnv()
+    config.ts             # NETWORK constants (API host, package ids, Seal committee), requireEnv()
     lib/
       seal.ts             # Sui signing, Seal encrypt/decrypt, SessionKey
       console.ts          # Console REST client (used by scripts and server)
@@ -53,26 +53,12 @@ pnpm run typecheck
 
 The pnpm scripts auto-load `.env` via `tsx --env-file=.env …`.
 
-### Networks
+### Network
 
-`src/config.ts` holds one row per Sui network: API host, fullnode, package ids,
-`BucketRegistry` id, and the Seal committee id. `CONSOLE_NETWORK` in `.env`
-selects the row:
+`src/config.ts` holds the Console API host, the Sui fullnode, the package ids,
+the `BucketRegistry` id and the Seal committee id, all for Sui mainnet.
 
-| `CONSOLE_NETWORK` | Use | API host |
-| --- | --- | --- |
-| `mainnet` (default) | production | `https://api.console.walrus.xyz` |
-| `testnet` | staging, QA, testing | `https://api.testnet.console.walrus.xyz` |
-
-API keys are per network. A key minted at `console.walrus.xyz` answers `401`
-on the testnet host, and the reverse. A shell variable wins over `.env`, so
-one-off runs can switch without an edit:
-
-```bash
-CONSOLE_NETWORK=testnet pnpm run full-round-trip
-```
-
-Seal key fetches go through Console's `fetch_key` proxy on the selected API
+Seal key fetches go through Console's `fetch_key` proxy on the API
 host, authenticated with the same `hbr_…` key. That is why `encrypt-file` and
 `decrypt-file` also read `CONSOLE_API_KEY`.
 
@@ -85,12 +71,9 @@ scripts run the helper CLIs. Source your `.env` first:
 
 ```bash
 set -a; source .env; set +a
-export BASE="https://api.console.walrus.xyz"   # testnet: https://api.testnet.console.walrus.xyz
+export BASE="https://api.console.walrus.xyz"
 export AUTH="Authorization: Bearer $CONSOLE_API_KEY"
 ```
-
-`BASE` must match `CONSOLE_NETWORK` in `.env`, because the helper CLIs read
-their network from there.
 
 ### 1. List spaces
 

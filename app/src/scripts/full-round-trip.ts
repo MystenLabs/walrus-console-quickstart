@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { timingSafeEqual } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { CONSOLE_NETWORK, NETWORK, requireEnv, requireServicePrivateKey } from '../config.js';
+import { NETWORK, requireEnv, requireServicePrivateKey } from '../config.js';
 import { ConsoleClient, ConsoleError } from '../lib/console.js';
 import {
   decryptBytes,
@@ -23,7 +23,7 @@ const keypair = loadKeypair(requireServicePrivateKey());
 const sui = makeSuiClient();
 const seal = makeSealClient(sui, apiKey);
 
-console.log(`network=${CONSOLE_NETWORK} api=${NETWORK.apiBase}`);
+console.log(`network=${NETWORK.suiNetwork} api=${NETWORK.apiBase}`);
 
 function step(n: number, label: string): void {
   console.log(`\n[${n}/12] ${label}`);

@@ -5,7 +5,7 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
-import { CONSOLE_NETWORK, NETWORK, requireEnv, requireServicePrivateKey } from '../config.js';
+import { NETWORK, requireEnv, requireServicePrivateKey } from '../config.js';
 import { ConsoleClient, ConsoleError } from '../lib/console.js';
 import {
   decryptBytes,
@@ -152,6 +152,6 @@ const hostname = process.env.HOST ?? '127.0.0.1';
 serve({ fetch: app.fetch, port, hostname }, ({ address, port }) => {
   console.log(
     `Console demo backend listening on http://${address}:${port} ` +
-      `(network=${CONSOLE_NETWORK} api=${NETWORK.apiBase})`,
+      `(network=${NETWORK.suiNetwork} api=${NETWORK.apiBase})`,
   );
 });
