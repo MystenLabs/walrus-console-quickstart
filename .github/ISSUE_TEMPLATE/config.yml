@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question
+    url: https://docs.wal.app/docs/console/faq
+    about: Questions are not tracked as issues. Start with the Console FAQ and docs.
+  - name: Report a security vulnerability
+    url: https://github.com/MystenLabs/walrus/security/policy
+    about: Report security issues by email to security@mystenlabs.com. Do not report security issues through GitHub or Discord.

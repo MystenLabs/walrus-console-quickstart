@@ -440,14 +440,14 @@ until the new key is installed.
 ## 4. Filing issues
 
 Open an issue at
-**[github.com/MystenLabs/walrus-console-quickstart/issues](https://github.com/MystenLabs/walrus-console-quickstart/issues)**
-with the label **`developer-docs`**.
+**[github.com/MystenLabs/walrus-console-quickstart/issues/new/choose](https://github.com/MystenLabs/walrus-console-quickstart/issues/new/choose)**
+and pick **Bug**, **Feature request** or **Documentation**. The form asks for
+what it needs. For a question, start with the
+[Console FAQ](https://docs.wal.app/docs/console/faq).
 
-Please include:
-
-- The endpoint and HTTP method
-- The HTTP status and the `code` field from the error response (if any)
-- The network (mainnet or testnet)
+Never paste an API key (`hbr_…`), a service private key (`suiprivkey1…`) or a
+credential bundle into an issue or an attachment. Report security issues by
+email to security@mystenlabs.com, not on GitHub.
 
 For the full machine-readable surface, see
 [`openapi.yaml`](openapi.yaml) (curated, Bearer-only,

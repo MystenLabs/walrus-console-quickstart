@@ -1,0 +1,78 @@
+name: Bug
+description: An error, a failed upload or download, missing files, or an issue with the MCP server.
+title: "[Bug]: "
+labels: ["console bug", "P1"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: stuck
+    attributes:
+      label: Did you get stuck?
+      description: Are you blocked from continuing?
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: For an API call, include the endpoint and HTTP method, and the network (mainnet or testnet).
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: dropdown
+    id: ai-client
+    attributes:
+      label: AI client (MCP related issue)
+      description: Only if the issue involves the Console MCP server.
+      options:
+        - Claude Code
+        - Claude Desktop
+        - Cursor
+        - Codex
+        - Gemini CLI
+        - Antigravity
+        - Other
+    validations:
+      required: false
+  - type: textarea
+    id: error-message
+    attributes:
+      label: Error message received
+      description: The exact message. For an API error, the HTTP status and the `code` field from the response.
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Paste, drop, or click to add files.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: "This report and its attachments contain no API keys (`hbr_…`), service private keys (`suiprivkey1…`), credential bundles, or other secrets."
+          required: true
+  - type: checkboxes
+    id: code-of-conduct
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our [Code of Conduct](https://github.com/MystenLabs/walrus/blob/main/CODE_OF_CONDUCT.md).
+      options:
+        - label: I agree to follow this project's Code of Conduct.
+          required: true

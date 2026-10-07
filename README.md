@@ -81,7 +81,10 @@ The testnet API serves the same pages at `https://api.testnet.console.walrus.xyz
 
 ## Questions / issues
 
-Open an issue: **[github.com/MystenLabs/walrus-console-quickstart/issues](https://github.com/MystenLabs/walrus-console-quickstart/issues)**
+Open an issue: **[github.com/MystenLabs/walrus-console-quickstart/issues/new/choose](https://github.com/MystenLabs/walrus-console-quickstart/issues/new/choose)**
+and pick **Bug**, **Feature request** or **Documentation**. For a question, start with the
+[Console FAQ](https://docs.wal.app/docs/console/faq). Report security issues by email to
+security@mystenlabs.com, not on GitHub.
 
 ## License
 
