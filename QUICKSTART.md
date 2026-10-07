@@ -46,8 +46,10 @@ one with `CONSOLE_NETWORK` in `.env`.
    Your account and a **Personal Space** are provisioned automatically.
    For the staging environment, use [testnet.console.walrus.xyz](https://testnet.console.walrus.xyz/)
    instead. The key you mint there works only against the testnet API host.
-2. Open **Settings → API Keys → Create API Key**, name the key, pick a
-   **Permissions** option, submit.
+2. Open **Integrations → Create API Key** (top-right), name the key, choose
+   **API key** (not **Management API key**, which only mints further keys and
+   cannot upload, download or manage assets), pick a **Permissions** option,
+   submit.
    - **`read_write`** — required for any state change: create/delete
      buckets, upload/rename/delete files, finalize private buckets.
    - **`read_only`** — listing, status, download only. Every write
@@ -59,7 +61,9 @@ one with `CONSOLE_NETWORK` in `.env`.
    `read_only` only for read-side integrations.
 3. On the reveal screen, copy the `hbr_…` Console API key. It is shown
    **once** — Console cannot recover it afterwards. Store it like an AWS
-   secret access key.
+   secret access key. The same screen shows the `suiprivkey1…` service
+   private key (§2.1) and a `CONSOLE_CREDENTIAL_BUNDLE` value that the
+   Console MCP installer accepts as a single paste.
 4. (Optional) Import the curated Postman collection and one environment into
    Postman Desktop:
    - `postman/console.postman_collection.json`
@@ -96,7 +100,7 @@ setup beforehand and a local decrypt step on download.
 
 ### 1. One-time setup — API key with Read & Write
 
-In **Settings → API Keys → Create API Key**, pick **Read & Write**
+In **Integrations → Create API Key**, choose **API key** and pick **Read & Write**
 (`read_write`). Private-bucket creation, finalize, and uploads are all
 writes — Read-only keys can't perform them. The reveal screen now exposes
 two secrets:
@@ -168,8 +172,9 @@ space has none.
 > timestamp), or clean up the stale bucket: list with
 > `GET /api/v1/spaces/{id}/buckets`, filter `provisioning_state == "pending_policy"`,
 > then `DELETE /api/v1/buckets/{id}?confirm=true` on each (the
-> `confirm=true` query param is required; delete also 400s if the bucket
-> still has files).
+> `confirm=true` query param is required). A bucket that still holds files
+> is refused with `400 bucket_not_empty` and a `file_count`; add
+> `&deleteContents=true` to delete them along with it.
 
 ### 4. Sign `bytes` with the service key
 
@@ -404,8 +409,11 @@ DELETE /api/v1/buckets/{bucketId}?confirm=true
 
 Both return `204`. The file delete is an asynchronous soft-delete, so the
 bucket can still report files for a few seconds. Until then, the bucket
-delete returns `400`. Retry it every ~3 seconds. The `confirm=true` query
-param is required.
+delete returns `400` with `code: "bucket_not_empty"` and a `file_count`.
+Retry it every ~3 seconds. The `confirm=true` query param is required. To
+delete a bucket together with the files still in it, add
+`&deleteContents=true`; set it only when the person deleting has agreed to
+lose those files.
 
 Buckets count toward a per-space cap. When you reach it, reserve returns
 `422` with `code: "plan_limit_exceeded"`. Delete the buckets you do not
@@ -413,7 +421,23 @@ need, then reserve again.
 
 ---
 
-## 3. Filing issues
+## 3. When a key stops working
+
+A key that stops authenticating gets a `401` whose `code` says why:
+
+| `code` | What happened | What to do |
+|---|---|---|
+| `api_key_revoked` | The key was revoked. | Create a new key in Console. |
+| `api_key_rotation_incomplete` | The key was revoked by a rotation that did not finish. | Create a new key in Console. |
+| `api_key_replaced` | The key was rotated and a new key replaces it. | Install the new `hbr_…` key and service private key. |
+
+Rotating revokes the old key before the new one is shown, so there is no window
+where both work. Anything using the old key is down from the moment it is revoked
+until the new key is installed.
+
+---
+
+## 4. Filing issues
 
 Open an issue at
 **[github.com/MystenLabs/walrus-console-quickstart/issues](https://github.com/MystenLabs/walrus-console-quickstart/issues)**
@@ -427,4 +451,4 @@ Please include:
 
 For the full machine-readable surface, see
 [`openapi.yaml`](openapi.yaml) (curated, Bearer-only,
-18 operations on 13 paths).
+19 operations on 14 paths).

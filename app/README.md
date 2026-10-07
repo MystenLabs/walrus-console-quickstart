@@ -222,7 +222,8 @@ curl -sS -H "$AUTH" "$BASE/api/v1/spaces/$SPACE_ID/buckets" \
       "$BASE/api/v1/buckets/{}?confirm=true"
 ```
 
-Nuke every bucket in the space (each 400s if it still has files, 204s if empty):
+Nuke every bucket in the space (each answers `400 bucket_not_empty` if it still has
+files, 204 if empty):
 
 ```bash
 curl -sS -H "$AUTH" "$BASE/api/v1/spaces/$SPACE_ID/buckets" \
@@ -231,7 +232,9 @@ curl -sS -H "$AUTH" "$BASE/api/v1/spaces/$SPACE_ID/buckets" \
       "$BASE/api/v1/buckets/{}?confirm=true"
 ```
 
-`?confirm=true` is required. Delete also 400s if the bucket still has files.
+`?confirm=true` is required. A bucket that still holds files is refused with
+`400 bucket_not_empty` and a `file_count`; add `&deleteContents=true` to delete the
+files with it.
 
 ---
 
@@ -320,8 +323,9 @@ for production code:
   layer and stream chunk uploads/downloads through `fetch`'s body stream,
   instead of buffering the whole file.
 - **`DELETE /api/buckets/:id` can still return 400 from Console.** Even with
-  `?confirm=true`, Console 400s if the bucket isn't empty — delete its files
-  first. Cleanest target is `pending_policy` (no files possible).
+  `?confirm=true`, Console answers `400 bucket_not_empty` (with a `file_count`) if
+  the bucket isn't empty — delete its files first, or pass `&deleteContents=true`.
+  Cleanest target is `pending_policy` (no files possible).
 - **`full-round-trip.ts` cleans up only on success.** The final step deletes
   the bucket (retrying the 400 while the async file delete settles), but a run
   that fails earlier leaves its bucket behind. Enough failed runs trip the

@@ -23,7 +23,10 @@ paths:
       tags:
         - Spaces
       summary: List spaces
-      description: List all spaces accessible to the authenticated user (personal + team).
+      description: >-
+        List all spaces accessible to the authenticated user (personal + team). For an API key,
+        storage_used and bucket_count count only the buckets the key can read, which is none in a
+        space other than the key's own. bucket_limit stays the space's limit.
       operationId: listSpaces
       security:
         - bearerAuth: []
@@ -56,6 +59,10 @@ paths:
       tags:
         - Buckets
       summary: List buckets in a space
+      description: >-
+        Session callers see every bucket in the space. An API key sees only the buckets it can
+        reach: those delegated to it, those it created, and public ones. A key asked about a space
+        it was not minted for gets an empty list rather than an error.
       operationId: listBucketsBySpace
       security:
         - bearerAuth: []
@@ -88,7 +95,10 @@ paths:
           schema:
             type: string
             maxLength: 255
-          description: Case-insensitive substring match on bucket name.
+          description: >-
+            Case-insensitive substring match on bucket name. `%` and `_` match literally; they are
+            not wildcards. The query is Unicode-normalised to NFC before it is matched, like the
+            stored names, so the composed and the decomposed spelling of `café` find the same rows.
         - name: visibility
           in: query
           required: false
@@ -275,11 +285,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PlanLimitExceededResponse'
+        '429':
+          description: >-
+            Rate limited, always with `Retry-After`. Code `TooManyRequestsError` is the per-account
+            create/resume limiter (shared with POST /buckets/{id}/resume); code
+            `sponsor_cap_exceeded` is the daily cap on sponsored transactions, per account or across
+            all accounts. A limiter store outage also answers 429 (fail closed).
   /api/v1/spaces/{id}/files:
     get:
       tags:
         - Files
       summary: List files across all buckets in a space (global search)
+      description: >-
+        Session callers see every file in the space. An API key sees only files in the buckets it
+        can reach: those delegated to it, those it created, and public ones. A key asked about a
+        space it was not minted for gets an empty list rather than an error.
       operationId: listSpaceFiles
       security:
         - bearerAuth: []
@@ -308,7 +328,10 @@ paths:
           schema:
             type: string
             maxLength: 255
-          description: Case-insensitive substring match on file name.
+          description: >-
+            Case-insensitive substring match on file name. `%` and `_` match literally; they are not
+            wildcards. The query is Unicode-normalised to NFC before it is matched, like the stored
+            names, so the composed and the decomposed spelling of `café` find the same rows.
         - name: sortField
           in: query
           schema:
@@ -417,25 +440,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - name
-              properties:
-                name:
-                  type: string
-                  minLength: 1
-                  maxLength: 100
-                sealPolicyId:
-                  type:
-                    - string
-                    - 'null'
-                  minLength: 1
-                  maxLength: 255
-                visibility:
-                  type: string
-                  enum:
-                    - public
-                    - private
+              $ref: '#/components/schemas/UpdateBucketRequest'
       responses:
         '200':
           description: Bucket updated
@@ -460,7 +465,10 @@ paths:
       tags:
         - Buckets
       summary: Delete bucket
-      description: Requires query parameter `confirm=true`.
+      description: >-
+        Requires `confirm=true`. A folder that still holds files also requires
+        `deleteContents=true`, and is refused with `bucket_not_empty` and a `file_count` otherwise.
+        Both flags must come from the person, never defaulted by a client.
       operationId: deleteBucket
       security:
         - bearerAuth: []
@@ -472,6 +480,20 @@ paths:
             type: string
             format: uuid
           description: Bucket UUID
+        - name: confirm
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Must be `true`. Acknowledges that deleting a folder is destructive.
+        - name: deleteContents
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >-
+            Must be `true` to delete a folder that still holds files. Ignored when the folder is
+            empty or already deleting.
       responses:
         '204':
           description: Bucket deleted
@@ -483,8 +505,9 @@ paths:
                 format: uuid
         '400':
           description: >-
-            Missing confirm=true, validation error, or bucket is not empty (files still present or
-            storage in use).
+            `bucket_delete_confirm_required` when `confirm=true` is missing, `bucket_not_empty`
+            (with `file_count`) when the folder still holds files and `deleteContents=true` is
+            missing, or a validation error.
         '401':
           description: Not authenticated
         '403':
@@ -524,6 +547,10 @@ paths:
           schema:
             type: string
             maxLength: 255
+          description: >-
+            Case-insensitive substring match on file name. `%` and `_` match literally; they are not
+            wildcards. The query is Unicode-normalised to NFC before it is matched, like the stored
+            names, so the composed and the decomposed spelling of `café` find the same rows.
         - name: sortField
           in: query
           schema:
@@ -610,6 +637,15 @@ paths:
                 name:
                   type: string
                   maxLength: 255
+                  description: >-
+                    Stored Unicode-normalised to NFC, and the 255 limit is measured on that form.
+                    Names that differ only by normal form are the same name: uploading the composed
+                    and the decomposed spelling of `café.pdf` yields `café.pdf` and `café (1).pdf`,
+                    never two rows that look identical. A client that binds the name into a private
+                    file's AAD (it sends `contentType`) must send it here rather than rely on the
+                    `file` part's filename: that filename has `"`, CR and LF escaped by the client
+                    and unescaped by the parser, and `%` is never escaped, so a name that literally
+                    contains `%22` is stored altered and that file could never be downloaded.
                 metadata:
                   type: string
                   description: >-
@@ -626,8 +662,21 @@ paths:
                   description: >-
                     Plaintext byte count (non-negative integer, sent as a string) for private
                     (Seal-encrypted) uploads, where the body is ciphertext. Must not exceed the
-                    uploaded payload size. Ignored for public buckets.
+                    uploaded payload size. Ignored for public buckets. Required whenever
+                    `contentType` is sent for a private bucket, because the size is bound into the
+                    ciphertext alongside the type: sending one without the other is refused with 400
+                    rather than stored as a file that can never be downloaded.
                   example: '0'
+                contentType:
+                  type: string
+                  description: >-
+                    COMG-1059: the MIME type the client declares for the file, stored verbatim as
+                    `declared_mime_type` and bound into a private file's Seal AAD. Send it as its
+                    own form field: the `file` part's Content-Type header is the parser's to
+                    rewrite, and a client that binds one value while the server records another can
+                    never download that file. Required for any client that writes an AAD, and
+                    sending it for a private bucket also requires `contentSize`. Omitted, the server
+                    falls back to the part header and the file is treated as unbound.
       responses:
         '202':
           description: Accepted
@@ -670,8 +719,11 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '415':
           description: >-
-            File type is not accepted (`code: "unsupported_file_type"`). Matched on the file name
-            for every upload, and additionally on the content signature for unencrypted ones.
+            File type is not accepted (`code: "unsupported_file_type"`). The check reads the file
+            name extension for every upload. Every upload also gets a signature check on the first 8
+            KiB. It detects executables only, and it reads nothing from ciphertext. The server
+            derives the recorded `mime_type` from the name and does not check it against the
+            content.
           content:
             application/json:
               schema:
@@ -691,7 +743,7 @@ paths:
       summary: Finalize private bucket
       description: >-
         Submit the on-chain signature to finalize a pending private bucket. Transitions the bucket
-        from `pending_policy` to `active`.
+        from 'pending' to 'active'.
       operationId: finalizeBucket
       security:
         - bearerAuth: []
@@ -850,7 +902,10 @@ paths:
                   description: >-
                     bucket_policy::revoke_all_permissions — removes every permission `member` holds
                     on the group. The wire kind keeps the legacy `unshare` name. Aborts on-chain if
-                    `member` is the group's last owner (ECannotRemoveLastAdmin). Session-only.
+                    `member` is the group's last owner (ECannotRemoveLastAdmin). Refused with 403
+                    `nothing_to_revoke` before sponsoring when `member` holds no permission on the
+                    group, which can briefly include a grant that has only just landed.
+                    Session-only.
                   properties:
                     kind:
                       type: string
@@ -868,9 +923,9 @@ paths:
                   description: >-
                     bucket_policy::revoke_all_permissions targeted at an API key's service signer —
                     submitted once per bucket by the revocation flow. Same on-chain guards as
-                    `unshare`, and session-only for the same reason: the revocation plan is
-                    authorized against the session user, so a Bearer caller has no legitimate use
-                    for this kind.
+                    `unshare`, and the same 403 `nothing_to_revoke` when the signer holds no
+                    permission. Session-only: the revocation plan is authorized against the session
+                    user, so a Bearer caller has no legitimate use for this kind.
                   properties:
                     kind:
                       type: string
@@ -896,6 +951,12 @@ paths:
           description: Not authenticated
         '403':
           description: Access denied or precheck failed
+        '429':
+          description: >-
+            Rate limited, always with `Retry-After`. Code `TooManyRequestsError` is the
+            per-account/per-IP sponsor limiter (shared with /execute); code `sponsor_cap_exceeded`
+            is the daily cap on sponsored transactions, per account or across all accounts. A
+            limiter store outage also answers 429 (fail closed).
   /api/v1/seal/sponsor/{digest}/execute:
     post:
       tags:
@@ -947,7 +1008,7 @@ paths:
     post:
       tags:
         - SEAL
-      summary: Proxy Seal aggregator fetch_key
+      summary: Proxy Seal aggregator fetch_key on mainnet
       description: >-
         Backend proxy for `POST ${aggregatorUrl}/v1/fetch_key`.
 
@@ -1196,7 +1257,14 @@ paths:
                           - failed
                       progress:
                         type: number
-                        description: Fractional progress (0..1), present only when the worker reports it.
+                        minimum: 0
+                        maximum: 1
+                        description: >-
+                          Fractional progress (0..1). Always 1 when state is 'completed'. Absent
+                          when state is 'failed' (read 'error' instead), and absent while queued or
+                          active until the worker reports a positive value. Not guaranteed to only
+                          increase: a job retried after a failed attempt still carries that
+                          attempt's value until the retry reports its own.
                       error:
                         type: object
                         description: Structured sanitized error, present only when state is 'failed'.
@@ -1206,10 +1274,112 @@ paths:
                         properties:
                           code:
                             type: string
+                            enum:
+                              - upload_payload_too_large
+                              - upload_bucket_not_found
+                              - upload_wallet_funding_required
+                              - upload_quota_rejected
+                              - upload_rate_limited
+                              - upload_unauthorized
+                              - upload_daily_funding_limit
+                              - upload_funding_paused
+                              - upload_funding_below_min_shortfall
+                              - upload_funding_failed
+                              - upload_funding_pending
+                              - upload_funding_gave_up
+                              - upload_funding_timeout
+                              - upload_cap_exceeded
+                              - upload_bucket_gone
+                              - upload_upstream_unavailable
+                              - upload_failed
+                            description: >-
+                              Machine-readable failure code. Each carries a retry class:
+
+                              `transient` (retry the same upload after a short pause), `daily_limit`
+                              (terminal for this account until `retry_at`; stop uploading to it
+                              before then), `funding_paused` (service-wide, every account; stop, and
+                              retry at `retry_at` only when present), `storage_cap` (free space,
+                              then retry), `permanent` (retrying as-is will not succeed).
+
+
+                              - `upload_payload_too_large` (permanent): The file exceeds the maximum
+                              upload size.
+
+                              - `upload_bucket_not_found` (permanent): The bucket was not found when
+                              the worker picked the job up.
+
+                              - `upload_wallet_funding_required` (transient): The account's upload
+                              wallet was short and is being funded inline.
+
+                              - `upload_quota_rejected` (permanent): The storage service rejected
+                              the upload against the plan.
+
+                              - `upload_rate_limited` (transient): The upload service throttled the
+                              request.
+
+                              - `upload_unauthorized` (transient): The worker's authorization to the
+                              storage service failed.
+
+                              - `upload_daily_funding_limit` (daily_limit): This account's rolling
+                              24h funding cap is reached; terminal for the account until the window
+                              rolls (see retry_at / retry_after_seconds).
+
+                              - `upload_funding_paused` (funding_paused): Upload funding is refused
+                              service-wide (global daily cap or kill switch), not by anything this
+                              account did. retry_at is present when a cap window closed it and
+                              absent when the kill switch did.
+
+                              - `upload_funding_below_min_shortfall` (permanent): The funding the
+                              upload needed was below the minimum the service funds.
+
+                              - `upload_funding_failed` (transient): The funding service was
+                              unavailable.
+
+                              - `upload_funding_pending` (transient): Funding for this upload is
+                              still in flight.
+
+                              - `upload_funding_gave_up` (transient): Funding did not settle within
+                              the job's retry budget; re-upload the file.
+
+                              - `upload_funding_timeout` (transient): Funding settlement timed out.
+
+                              - `upload_cap_exceeded` (storage_cap): The space's storage cap is
+                              reached; terminal until files are deleted.
+
+                              - `upload_bucket_gone` (permanent): The bucket was deleted while the
+                              upload was in flight.
+
+                              - `upload_upstream_unavailable` (transient): The storage service was
+                              temporarily unavailable.
+
+                              - `upload_failed` (permanent): The upload failed for a reason the
+                              service does not classify; do not retry automatically.
                           message:
                             type: string
+                            description: >-
+                              Human-readable sentence safe to show the user. For
+                              `upload_daily_funding_limit` it names the time uploads resume.
                           http_status:
                             type: number
+                            minimum: 400
+                            maximum: 599
+                          retry_at:
+                            type: string
+                            format: date-time
+                            description: >-
+                              Expected instant the cap that refused this upload reopens (UTC, whole
+                              seconds). Present for `upload_daily_funding_limit`, and for
+                              `upload_funding_paused` when a global cap window closed it (absent
+                              when the kill switch did). The cap can still be closed at that instant
+                              if later spend keeps it over the line; a new upload then fails with a
+                              later time.
+                          retry_after_seconds:
+                            type: integer
+                            minimum: 0
+                            description: >-
+                              Whole seconds from the moment of this response until `retry_at`,
+                              recomputed on every read; 0 once the window has rolled. Present
+                              exactly when `retry_at` is.
         '400':
           description: Invalid path parameter
           content:
@@ -1423,6 +1593,272 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/search:
+    get:
+      tags:
+        - Files
+      summary: Global search across accessible files with filters + facets
+      operationId: search
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: modifiedFrom
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: modifiedTo
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: q
+          in: query
+          required: false
+          description: >-
+            Search text, trimmed. At most 255 characters, the filename limit, so a file can be
+            searched by its full name. A longer value returns 400 with `q must be 255 characters or
+            fewer.`
+          schema:
+            type: string
+            maxLength: 255
+        - name: scope
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - space
+              - bucket
+        - name: scopeId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: sizeMax
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: sizeMin
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: sortDirection
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - asc
+              - desc
+        - name: sortField
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - modified
+              - name
+              - size
+        - name: tags
+          in: query
+          required: false
+          schema:
+            allOf:
+              - type: array
+                items:
+                  type: string
+              - type: array
+                maxItems: 20
+                items:
+                  type: string
+                  minLength: 1
+                  maxLength: 64
+        - name: types
+          in: query
+          required: false
+          schema:
+            allOf:
+              - type: array
+                items:
+                  type: string
+              - type: array
+                maxItems: 10
+                items:
+                  type: string
+                  enum:
+                    - CODE
+                    - GEO
+                    - IMAGE
+                    - AUDIO
+                    - DOCUMENT
+                    - TABLE
+                    - TEXT
+                    - VIDEO
+                    - ARCHIVE
+                    - OTHER
+      responses:
+        '200':
+          description: Search results with facets + pagination
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      files:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                            bucket_id:
+                              type: string
+                              format: uuid
+                            bucket_name:
+                              type: string
+                            name:
+                              type: string
+                            mime_type:
+                              type:
+                                - string
+                                - 'null'
+                              description: >-
+                                Derived from the file name at upload and at rename, or from the
+                                client's declared type when the name maps to nothing. The server
+                                does not check it against the content. Every download route serves
+                                `application/octet-stream`.
+                            size:
+                              type: string
+                              description: Byte size serialized as decimal string (BigInt).
+                            status:
+                              type: string
+                              enum:
+                                - pending
+                                - uploading
+                                - active
+                                - deleting
+                                - failed
+                                - deleted
+                            metadata:
+                              type: object
+                            created_at:
+                              type: string
+                              format: date-time
+                            updated_at:
+                              type: string
+                              format: date-time
+                      folders:
+                        type: array
+                        description: >-
+                          Matching folders (Console buckets). Not paginated — the first page returns
+                          all matches up to `limit`; subsequent pages (`cursor`) return files only.
+                          `types` filter excludes folders (they aren't mime-typed). `scope=bucket`
+                          returns an empty list (the bucket itself is the search container).
+                        items:
+                          type: object
+                          required:
+                            - id
+                            - space_id
+                            - name
+                            - metadata
+                            - storage_used
+                            - created_at
+                            - updated_at
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                            space_id:
+                              type: string
+                              format: uuid
+                            name:
+                              type: string
+                            metadata:
+                              type: object
+                              additionalProperties: true
+                            storage_used:
+                              type: string
+                              description: >-
+                                Aggregate storage of files in the folder, in bytes (bigint as
+                                string).
+                            created_at:
+                              type: string
+                              format: date-time
+                            updated_at:
+                              type: string
+                              format: date-time
+                      facets:
+                        type: object
+                        properties:
+                          categories:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                key:
+                                  type: string
+                                  enum:
+                                    - CODE
+                                    - GEO
+                                    - IMAGE
+                                    - AUDIO
+                                    - DOCUMENT
+                                    - TABLE
+                                    - TEXT
+                                    - VIDEO
+                                    - ARCHIVE
+                                    - OTHER
+                                count:
+                                  type: integer
+                      total_count:
+                        type: integer
+                  pagination:
+                    type: object
+                    properties:
+                      limit:
+                        type: integer
+                      has_more:
+                        type: boolean
+                      next_cursor:
+                        type:
+                          - string
+                          - 'null'
+        '400':
+          description: >-
+            Invalid query params or tampered cursor. An over-length `q` (over 255 characters)
+            returns `{ error: 'q must be 255 characters or fewer.', code: 'bad_request' }`.
+        '401':
+          description: Not authenticated.
+        '403':
+          description: Session or api-key not authorized for the requested scope.
 components:
   securitySchemes:
     bearerAuth:
@@ -1449,6 +1885,8 @@ components:
             - api_key_registering
             - api_key_revoking
             - api_key_revoked
+            - api_key_rotation_incomplete
+            - api_key_replaced
             - read_only_api_key
             - bucket_not_in_scope
             - mirror_missing_grant
@@ -1462,9 +1900,32 @@ components:
             - email_already_registered
             - unsupported_media_type
             - unsupported_file_type
+            - extension_change_not_allowed
             - invalid_origin
+            - session_required
+            - forbidden
       required:
         - error
+    RotationConflictResponse:
+      type: object
+      required:
+        - error
+        - code
+      description: A rotation step refused because of the keys' state.
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+        code:
+          type: string
+          enum:
+            - rotation_not_started
+            - predecessor_not_revoked
+            - api_key_already_replaced
+            - rotation_scope_mismatch
+            - rotation_space_mismatch
+            - api_key_not_rotatable
+            - api_key_not_a_successor
     RevocationConflictResponse:
       type: object
       required:
@@ -1616,8 +2077,17 @@ components:
           properties:
             memories:
               type: boolean
+            blobIdColumnVisible:
+              type: boolean
+            apiKeyExpirationInput:
+              type: boolean
+            apiKeyRotationResume:
+              type: boolean
           required:
             - memories
+            - blobIdColumnVisible
+            - apiKeyExpirationInput
+            - apiKeyRotationResume
     AuthProvider:
       type: string
       enum:
@@ -1671,9 +2141,108 @@ components:
             - string
             - 'null'
           format: date-time
+        rotation_started_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: Set once a Rotate of this key has started.
+        replaces_api_key_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+          description: 'On a Rotate''s Successor: the key it replaces.'
+        rotation_ungranted:
+          type: boolean
+          description: >-
+            A Rotate's Successor minted more than five minutes ago that was never granted, as far as
+            the indexer has seen. Its secrets were never shown; discard it with DELETE
+            /api-keys/{id}/rotation and resume the Rotate.
         created_at:
           type: string
           format: date-time
+    ApiKeyListItem:
+      type: object
+      description: One row of GET /api-keys, as stored.
+      required:
+        - id
+        - space_id
+        - user_id
+        - prefix
+        - scope
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        space_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        prefix:
+          type: string
+          description: First 8 characters of the key for identification
+          example: a1b2c3d4
+        scope:
+          type: string
+          enum:
+            - read
+            - readwrite
+            - key_admin
+          description: |-
+            read: Can read objects in private buckets.
+            readwrite: Can read and write objects in private buckets.
+            key_admin: A Management API key; can only create data-plane keys.
+        label:
+          type:
+            - string
+            - 'null'
+        service_signer_address:
+          type: string
+        status:
+          type: string
+          enum:
+            - active
+            - registering
+            - revoking
+            - revoked
+        expected_permission:
+          type:
+            - string
+            - 'null'
+          enum:
+            - BucketViewer
+            - BucketEditor
+            - null
+        created_at:
+          type: string
+          format: date-time
+        last_used:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        revoked_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        rotation_started_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: Set once a Rotate of this key has started.
+        replaces_api_key_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+          description: 'On a Rotate''s Successor: the key it replaces.'
     ApiKeyCreateResponse:
       type: object
       properties:
@@ -1701,6 +2270,12 @@ components:
             read_only: Can read objects in private buckets.
             read_write: Can read and write objects in private buckets.
             key_admin: Can only create data-plane keys; no bucket access.
+        replaces_api_key_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+          description: The key this one replaces, when minted by a Rotate.
         created_at:
           type: string
           format: date-time
@@ -1808,6 +2383,16 @@ components:
           type:
             - string
             - 'null'
+        creator:
+          type:
+            - string
+            - 'null'
+          description: >-
+            COMG-1059: the Sui address the folder's on-chain group was derived from. A client
+            recomputes the group id from it and refuses a ciphertext whose Seal identity names a
+            different group, instead of trusting `seal_policy_id`, which is a mutable column. Null
+            for a public folder. Null on a private folder means the address was never recorded,
+            which a client treats as a refusal rather than as permission to skip the check.
         storage_used:
           type: integer
         created_at:
@@ -1827,26 +2412,6 @@ components:
         - storage_cap
         - created_at
         - updated_at
-    CreateBucketRequest:
-      type: object
-      properties:
-        name:
-          type: string
-          minLength: 1
-          maxLength: 100
-        visibility:
-          type: string
-          enum:
-            - public
-            - private
-        seal_policy_id:
-          type: string
-          description: Required when visibility=private. Must be omitted for public buckets.
-      required:
-        - name
-        - visibility
-        - seal_policy_id
-      additionalProperties: false
     UpdateBucketRequest:
       type: object
       properties:
@@ -1854,13 +2419,11 @@ components:
           type: string
           minLength: 1
           maxLength: 100
-        seal_policy_id:
-          type:
-            - string
-            - 'null'
-          minLength: 1
-          maxLength: 255
-          description: SEAL policy ID. Pass null to clear.
+          description: >-
+            Stored Unicode-normalised to NFC, and the 100 limit is measured on that form. The
+            composed and the decomposed spelling of `café` are one folder name, so the second is a
+            409 rather than an auto-suffixed `café (1)`. Case still tells two folders apart, unlike
+            file names.
         visibility:
           type: string
           enum:
@@ -1910,6 +2473,15 @@ components:
           type:
             - string
             - 'null'
+        pooled_blob_object_id:
+          type:
+            - string
+            - 'null'
+          description: >-
+            Sui object id of the `PooledBlob` backing this file, resolvable on a Sui explorer. Null
+            until the upload completes, for files uploaded before this field existed, and when
+            Oyster did not store the blob on Walrus. Not unique: identical content in one space
+            shares one `PooledBlob`.
         size:
           type: integer
         content_size:
@@ -1919,10 +2491,31 @@ components:
           description: >-
             Plaintext content size in bytes for private (encrypted) files; null for public files and
             legacy rows. The size field stays the stored (ciphertext) size.
+        original_name:
+          type:
+            - string
+            - 'null'
+          description: >-
+            COMG-1059: the name this file was requested under, trimmed and NFC-normalised, before
+            any collision suffix. Bound into a private file's Seal AAD, so a client rebuilds the
+            binding from this value and refuses to decrypt if it disagrees. Immutable; a rename
+            changes `name` and leaves this alone. Null on files uploaded before the binding shipped.
+        declared_mime_type:
+          type:
+            - string
+            - 'null'
+          description: >-
+            COMG-1059: the MIME type the uploading client declared, verbatim, or an empty string
+            when it declared none. Bound alongside `original_name`; distinct from `mime_type`, which
+            the server derives from the name. Null on files uploaded before the binding shipped.
         mime_type:
           type:
             - string
             - 'null'
+          description: >-
+            Derived from the file name at upload and at rename, or from the client's declared type
+            when the name maps to nothing. The server does not check it against the content. Every
+            download route serves `application/octet-stream`.
         status:
           type: string
         is_private:

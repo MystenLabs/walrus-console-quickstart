@@ -61,8 +61,9 @@ key that signs the reserve transaction and Seal decrypt sessions.
 - `GET …/files/{fileId}/download` can answer `307` to a user-content host.
   Follow redirects (`curl -L`; `fetch` follows them by default).
 - Poll `…/files/{fileId}/status` until `state === "completed"` before download.
-- `DELETE /api/v1/buckets/{id}` requires `?confirm=true`; also 400s if the bucket
-  still has files.
+- `DELETE /api/v1/buckets/{id}` requires `?confirm=true`. A bucket that still holds
+  files is refused with `400 bucket_not_empty` and a `file_count`; add
+  `&deleteContents=true` to delete the files with it.
 
 ## Verify
 

@@ -26,8 +26,6 @@ If you can call a REST endpoint, you can build on Console.
 
 ## Who this repo is for
 
-- **Hackathon participants** following the live build-along — clone or fork this repo and
-  code along.
 - **Any developer** who wants the curated API surface (OpenAPI + Postman) and a copy-paste
   quickstart to integrate Console.
 
@@ -36,7 +34,7 @@ If you can call a REST endpoint, you can build on Console.
 | Path                             | What it is                                                                                      |
 | -------------------------------- | ----------------------------------------------------------------------------------------------- |
 | [`QUICKSTART.md`](QUICKSTART.md) | "Hello world" tour — sign up, create an encrypted bucket, upload + download a file. Start here. |
-| [`openapi.yaml`](openapi.yaml)   | Curated OpenAPI spec — the public, Bearer-only API surface (18 operations on 13 paths).         |
+| [`openapi.yaml`](openapi.yaml)   | Curated OpenAPI spec — the public, Bearer-only API surface (19 operations on 14 paths).         |
 | [`postman/`](postman/)           | Ready-to-import Postman collection + environment for poking the API by hand.                    |
 | [`app/`](app/)                   | TypeScript reference integration: curl walkthrough, helper CLIs, automated round-trip, Hono backend. |
 | [`AGENTS.md`](AGENTS.md)         | Repo-level guidance for AI coding assistants (loaded by `CLAUDE.md`).                           |
@@ -51,8 +49,11 @@ Prerequisites: a way to sign in to the web app to mint an API key — Google or 
    are provisioned automatically. For the staging environment, sign in at
    [testnet.console.walrus.xyz](https://testnet.console.walrus.xyz/) instead. API keys are
    per network.
-2. **Settings → API Keys → Create API Key**, pick **Read & Write**
-   (`read_write`), and copy the `hbr_…` key — it is shown **once**.
+2. **Integrations → Create API Key** (top-right). Choose **API key**: the other
+   type, **Management API key**, only mints further keys and cannot upload,
+   download or manage assets. Pick **Read & Write** (`read_write`) and copy both
+   secrets the reveal screen shows, the `hbr_…` API key and the `suiprivkey1…`
+   service private key. They are shown **once**.
 3. Follow [`QUICKSTART.md`](QUICKSTART.md) to create a Seal-encrypted bucket and round-trip
    a file.
 
