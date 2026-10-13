@@ -73,8 +73,10 @@ service key setup → get space → reserve → sign → finalize →
 encrypt → upload → poll → download → decrypt → delete
 ```
 
-Buckets are Seal-encrypted client-side — Console stores ciphertext only
-and never sees plaintext or decryption material. Creation goes through a
+Buckets are Seal-encrypted client-side — Console stores ciphertext only.
+Your plaintext and decrypted keys never reach Console: key requests pass
+through Console's proxy, but the key material comes back encrypted to a
+session key only you hold. Creation goes through a
 **reserve → sign → finalize** handshake, with a one-time service-key
 setup beforehand and a local decrypt step on download.
 
@@ -100,7 +102,8 @@ two secrets:
   sponsored by Console via Enoki.
 
 Both are shown **once**. Paste them into Postman as `bearerToken` and
-`consoleServicePrivateKey`, or stash them in your `.env`.
+`consoleServicePrivateKey`, or stash them in your `.env`. Add `.env` to your
+`.gitignore` so neither secret reaches version control.
 
 
 ### 2. Get your space id
@@ -200,7 +203,7 @@ access checks. The bucket is now usable.
 
 ### 6. Encrypt the file with Seal
 
-Private buckets store **Seal ciphertext only** — Console never sees plaintext.
+Private buckets store **Seal ciphertext only** — your plaintext never reaches Console.
 Encrypt locally with [`@mysten/seal`](https://www.npmjs.com/package/@mysten/seal)
 against the `seal_policy_id` returned by Finalize:
 
@@ -267,6 +270,24 @@ const { encryptedObject } = await seal.encrypt({
 
 `encryptedObject` is the byte stream you upload next.
 
+#### About `verifyKeyServers`
+
+`verifyKeyServers: false` is right here, but do not carry it into other Seal
+code without knowing what it turns off.
+
+With `true`, the SDK runs one proof-of-possession check per key server the
+first time it loads the server list: it calls the server's URL and verifies a
+signature against the public key in that server's on-chain object, proving the
+host behind the URL holds the key the chain says it should. That check does not
+fit this setup. The aggregator URL is Console's proxy, not a URL registered for
+the committee, and the SDK skips the check for committee servers anyway. What
+you rely on instead is the pinned `SEAL_COMMITTEE_OBJECT_ID`: the SDK verifies
+every key share it receives against that object's on-chain public key, on
+either setting.
+
+When you configure independent key servers by their own URLs, keep
+`verifyKeyServers: true` unless you have a reason not to.
+
 ### 7. Upload — retry on `mirror_missing_grant`
 
 ```http
@@ -305,8 +326,9 @@ GET /api/v1/buckets/{bucketId}/files/{fileId}/download
 **Follow redirects.** On deployments that serve user content from its own
 hostname, this answers `307` to that host rather than returning bytes, so use
 `curl -L` or an HTTP client with redirects enabled. The redirect target is
-single-use and short-lived. Mint your own with `POST .../download-url` if you
-need a link that lasts.
+single-use and short-lived, and anyone holding it can fetch the ciphertext
+until it expires, so do not log or share it. Mint your own with
+`POST .../download-url` if you need a link that lasts.
 
 Returns the raw **Seal ciphertext**. Decrypt with `@mysten/seal` by
 building the bucket's `seal_approve` access-check PTB (signed by your
@@ -361,10 +383,11 @@ const sessionKey = await SessionKey.create({
 const plaintext = await seal.decrypt({ data: ciphertext, sessionKey, txBytes });
 ```
 
-Console's API surface stops at the ciphertext byte stream. The only decrypt
-traffic that touches Console is the `fetch_key` proxy call, which Console
-relays to the Seal aggregator without reading the result. The DEK is
-reconstructed and the plaintext decrypted on your side.
+Decryption happens on your machine: the plaintext and the decrypted key never
+reach Console. The only decrypt traffic that touches Console is the `fetch_key`
+proxy call. The proxy checks your API key and relays the request, and the key
+share it passes back is encrypted to your session key, so the proxy cannot read
+it. The DEK is reconstructed and the plaintext decrypted on your side.
 
 ### 10. Optional — mint a signed download URL
 
@@ -418,7 +441,8 @@ A key that stops authenticating gets a `401` whose `code` says why:
 | `api_key_rotation_incomplete` | The key was revoked by a rotation that did not finish. | Create a new key in Console. |
 | `api_key_replaced` | The key was rotated and a new key replaces it. | Install the new `hbr_…` key and service private key. |
 
-Rotating revokes the old key before the new one is shown, so there is no window
+You revoke and rotate keys from **Integrations**. Rotating revokes the old key
+before the new one is shown, so there is no window
 where both work. Anything using the old key is down from the moment it is revoked
 until the new key is installed.
 
