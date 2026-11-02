@@ -75,8 +75,8 @@ encrypt → upload → poll → download → decrypt → delete
 
 Buckets are Seal-encrypted client-side — Console stores ciphertext only.
 Your plaintext and decrypted keys never reach Console: key requests pass
-through Console's proxy, but the key material comes back encrypted to a
-session key only you hold. Creation goes through a
+through Console's proxy, but the key material comes back encrypted to a key
+that the Seal SDK generates on your machine. Creation goes through a
 **reserve → sign → finalize** handshake, with a one-time service-key
 setup beforehand and a local decrypt step on download.
 
@@ -385,9 +385,10 @@ const plaintext = await seal.decrypt({ data: ciphertext, sessionKey, txBytes });
 
 Decryption happens on your machine: the plaintext and the decrypted key never
 reach Console. The only decrypt traffic that touches Console is the `fetch_key`
-proxy call. The proxy checks your API key and relays the request, and the key
-share it passes back is encrypted to your session key, so the proxy cannot read
-it. The DEK is reconstructed and the plaintext decrypted on your side.
+proxy call. The proxy checks your API key, sees which policy's key you request,
+and relays the request. The key share it passes back is encrypted to a one-time
+key that the SDK generates on your machine and never sends, so the proxy cannot
+read it. The DEK is reconstructed and the plaintext decrypted on your side.
 
 ### 10. Optional — mint a signed download URL
 
