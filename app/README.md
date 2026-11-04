@@ -92,7 +92,7 @@ Bucket names must be unique per space, so the snippet appends a Unix timestamp.
 
 ```bash
 RESERVE=$(curl -sS -X POST -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"name\":\"round-trip-$(date +%s)\",\"scope\":\"private\"}" \
+  -d "{\"name\":\"round-trip-$(date +%s)\",\"scope\":\"private\",\"members\":[]}" \
   "$BASE/api/v1/spaces/$SPACE_ID/buckets")
 
 export BUCKET_ID=$(echo "$RESERVE" | jq -r '.bucket_id // empty')

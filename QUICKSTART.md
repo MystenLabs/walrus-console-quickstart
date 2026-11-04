@@ -119,8 +119,14 @@ List spaces`.)
 POST /api/v1/spaces/{spaceId}/buckets
 Content-Type: application/json
 
-{ "name": "secrets", "scope": "private" }
+{ "name": "secrets", "scope": "private", "members": [] }
 ```
+
+`members` lists the other API keys in the space that get access to the bucket.
+The empty list grants access to this key and the bucket owner only. To add a key,
+take its address from `GET /api/v1/api-keys/space-signers` and send
+`{ "address": "0x…", "role": "viewer" }`, or `"editor"` for a read-write key.
+Omitting `members` is deprecated, and Console will stop accepting it.
 
 Response (`201`):
 
