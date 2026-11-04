@@ -198,10 +198,13 @@ paths:
                   type: array
                   maxItems: 32
                   description: >-
-                    Optional client-authored roster of OTHER service accounts to grant on the new
-                    bucket. Present (including an empty array) means the PTB grants exactly this set
-                    and the space's active signers are ignored; omit it to let the server derive the
-                    roster from space state.
+                    Client-authored roster of OTHER service accounts to grant on the new bucket.
+                    Present (including an empty array) means the PTB grants exactly this set and the
+                    space's active signers are ignored. API-key callers should always send it:
+                    omitting it is deprecated and will stop being accepted after a deprecation
+                    window, because the server then derives the roster from space state and the
+                    client cannot verify who it chose. Session callers must omit it; their
+                    membership is derived from the space by design.
                   items:
                     type: object
                     required:
