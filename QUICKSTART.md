@@ -434,12 +434,12 @@ need, then reserve again.
 
 ## 3. When a key stops working
 
-A key that stops authenticating gets a `401` whose `code` says why:
+A revoked or rotated key gets a `401` whose `code` says why:
 
 | `code` | What happened | What to do |
 |---|---|---|
 | `api_key_revoked` | The key was revoked. | Create a new key in Console. |
-| `api_key_rotation_incomplete` | The key was revoked by a rotation that did not finish. | Create a new key in Console. |
+| `api_key_rotation_incomplete` | The key was revoked by a rotation that has not finished. | Its creator can resume the rotation from **Integrations**. |
 | `api_key_replaced` | The key was rotated and a new key replaces it. | Install the new `hbr_…` key and service private key. |
 
 You revoke and rotate keys from **Integrations**. Rotating revokes the old key
