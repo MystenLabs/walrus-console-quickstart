@@ -51,7 +51,11 @@ cp .env.example .env   # fill CONSOLE_API_KEY + CONSOLE_SERVICE_PRIVATE_KEY
 pnpm run typecheck
 ```
 
-The pnpm scripts auto-load `.env` via `tsx --env-file=.env …`.
+The pnpm scripts auto-load `.env` via `tsx --env-file=.env …`. This repo's
+`.gitignore` already excludes `.env`; keep it excluded if you copy the code into
+your own project. If calls start failing with `401`, the `code` field says
+whether the key was revoked or rotated, see
+[QUICKSTART §3](../QUICKSTART.md#3-when-a-key-stops-working).
 
 ### Network
 
@@ -164,8 +168,9 @@ curl -sSL -H "$AUTH" -o downloaded.enc \
 ### 8. Mint + redeem a signed download URL
 
 The mint returns a relative `/downloads/v1.…` path. Redeeming it needs **no
-auth header** — the signed token in the path is the credential. The requested
-`ttl` (seconds) is clamped to the space plan's cap (free: 15 minutes).
+auth header** — the signed token in the path is the credential, so anyone holding
+it can fetch the ciphertext until it expires. Do not log or share it. The
+requested `ttl` (seconds) is clamped to the space plan's cap (free: 15 minutes).
 
 ```bash
 SIGNED_URL=$(curl -sS -X POST -H "$AUTH" -H 'Content-Type: application/json' \
