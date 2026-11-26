@@ -122,8 +122,18 @@ List spaces`.)
 POST /api/v1/spaces/{spaceId}/buckets
 Content-Type: application/json
 
-{ "name": "secrets", "scope": "private" }
+{ "name": "secrets", "scope": "private", "members": [] }
 ```
+
+`members` lists the other API keys in the space that get access to the bucket.
+The empty list grants access to this key and the bucket owner only. To add a key,
+call `GET /api/v1/api-keys/space-signers` (Postman: `bearer / buckets / List
+space signers`) and take its `signers[].service_signer_address`. Skip your own
+key, which is in the list too. Send `{ "address": "0x…", "role": "viewer" }` for
+a `read` key and `"editor"` for a `readwrite` key. Naming your own address or a
+role that does not match the key's `scope` gets `400`.
+
+`members` is required: a request without it is rejected with `400 bucket_create_authored_members_invalid`.
 
 Response (`201`):
 
