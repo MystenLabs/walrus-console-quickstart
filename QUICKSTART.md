@@ -124,9 +124,13 @@ Content-Type: application/json
 
 `members` lists the other API keys in the space that get access to the bucket.
 The empty list grants access to this key and the bucket owner only. To add a key,
-take its address from `GET /api/v1/api-keys/space-signers` and send
-`{ "address": "0x…", "role": "viewer" }`, or `"editor"` for a read-write key.
-Omitting `members` is deprecated, and Console will stop accepting it.
+call `GET /api/v1/api-keys/space-signers` (Postman: `bearer / buckets / List
+space signers`) and take its `signers[].service_signer_address`. Skip your own
+key, which is in the list too. Send `{ "address": "0x…", "role": "viewer" }` for
+a `read` key and `"editor"` for a `readwrite` key. Naming your own address or a
+role that does not match the key's `scope` gets `400`.
+
+`members` is required: a request without it is rejected with `400 bucket_create_authored_members_invalid`.
 
 Response (`201`):
 

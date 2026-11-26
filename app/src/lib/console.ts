@@ -126,8 +126,8 @@ export class ConsoleClient {
     const res = await fetch(`${this.baseUrl}/api/v1/spaces/${spaceId}/buckets`, {
       method: 'POST',
       headers: this.jsonHeaders,
-      // An empty roster grants the bucket to this key and the owner only. Without
-      // `members` the server would choose the other recipients, and that is deprecated.
+      // An empty roster grants the bucket to this key and the owner only.
+      // `members` is required for API-key callers: the server rejects a reserve without it.
       body: JSON.stringify({ name, scope: 'private', members: [] }),
     });
     return expect<ReserveResponse>(res);

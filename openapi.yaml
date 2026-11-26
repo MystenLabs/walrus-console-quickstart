@@ -199,11 +199,8 @@ paths:
                   maxItems: 32
                   description: >-
                     Client-authored roster of OTHER service accounts to grant on the new bucket.
-                    Present (including an empty array) means the PTB grants exactly this set and the
-                    space's active signers are ignored. API-key callers should always send it:
-                    omitting it is deprecated and will stop being accepted after a deprecation
-                    window, because the server then derives the roster from space state and the
-                    client cannot verify who it chose. Session callers must omit it; their
+                    Required for API-key callers: the PTB grants exactly this set, and an empty
+                    array grants no other service account. Session callers must omit it; their
                     membership is derived from the space by design.
                   items:
                     type: object
@@ -269,7 +266,8 @@ paths:
             bucket_create_authored_members_invalid: duplicate address, the caller's own address, the
             owner address, an address that is not an active data-plane signer of the space
             (`key_admin` keys are excluded), a role that contradicts an active key's expected
-            on-chain permission, or `members` sent on the session path)
+            on-chain permission, `members` omitted by an API-key caller, or `members` sent on the
+            session path)
         '401':
           description: Not authenticated
         '403':
@@ -292,6 +290,46 @@ paths:
             create/resume limiter (shared with POST /buckets/{id}/resume); code
             `sponsor_cap_exceeded` is the daily cap on sponsored transactions, per account or across
             all accounts. A limiter store outage also answers 429 (fail closed).
+  /api/v1/api-keys/space-signers:
+    get:
+      tags:
+        - Buckets
+      summary: List the space's data-plane service signers
+      description: >-
+        The addresses a bucket reserve may name in `members`. Returns the space's `active` and
+        `registering` data-plane keys, including the calling key; `key_admin` keys are excluded.
+        The space is resolved from the Bearer key. `scope` uses the internal names (`read` /
+        `readwrite`) because it maps straight to the only role a roster may author for that
+        address: `read` → `viewer`, `readwrite` → `editor`.
+      operationId: listSpaceSigners
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The space's data-plane service signers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  signers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        api_key_id:
+                          type: string
+                          format: uuid
+                        service_signer_address:
+                          type: string
+                          description: Sui address of the key's service signer.
+                        scope:
+                          type: string
+                          enum:
+                            - read
+                            - readwrite
+        '401':
+          description: Not authenticated
   /api/v1/spaces/{id}/files:
     get:
       tags:

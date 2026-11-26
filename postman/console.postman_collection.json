@@ -574,6 +574,42 @@
           "description": "Bucket lifecycle. All buckets are private (Seal-encrypted) and need a reserve → sign → finalize handshake. Delete and rename live at the top level of this folder.",
           "item": [
             {
+              "name": "List space signers",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{bearerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/api-keys/space-signers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "api-keys",
+                    "space-signers"
+                  ]
+                },
+                "description": "The addresses a bucket reserve may name in `members`. Includes the calling key, which must not be named. `scope` maps to the only allowed role: `read` → `viewer`, `readwrite` → `editor`."
+              },
+              "response": []
+            },
+            {
               "name": "List buckets in a space",
               "request": {
                 "auth": {
